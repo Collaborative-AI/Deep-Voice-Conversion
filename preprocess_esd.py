@@ -186,7 +186,6 @@ for r in results:
 # normalize log-mel
 print('normalize log-mel...')
 mels = []
-spk2lf0 = {}
 for wav_name in train_wavs_names:
     mel, _, _ = wn2mel[wav_name]
     mels.append(mel)
@@ -198,7 +197,6 @@ mel_stats = np.concatenate([mean.reshape(1,-1), std.reshape(1,-1)], 0)
 np.save(f'{save_root}/mel_stats.npy', mel_stats)
 
 results = Parallel(n_jobs=-1)(delayed(normalize_logmel)(wav_name, wn2mel[wav_name][0], mean, std) for wav_name in tqdm(wn2mel.keys()))
-print(results)
 wn2mel_new = {}
 for r in results:
     wav_name, mel = r

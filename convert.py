@@ -22,6 +22,8 @@ import kaldiio
 import resampy
 import pyworld as pw
 
+import wave
+
 def select_wavs(paths, min_dur=2, max_dur=8):
     pp = []
     for p in paths:
@@ -69,11 +71,18 @@ def extract_logmel(wav_path, mean, std, sr=16000):
 
 @hydra.main(config_path="config/convert.yaml")
 def convert(cfg):
-    src_wav_paths = glob('/Dataset/VCTK-Corpus/wav48_silence_trimmed/p225/*mic1.flac') # modified to absolute wavs path, can select any unseen speakers
+    # current_path = os.getcwd()
+    # print("Current path:", current_path)
+    abs_path = "C:/Users/qaz27/OneDrive/Desktop/Duke/Portfolio/DeepVoiceConversion/VQMIVC/"
+    
+    data_root = abs_path + "Dataset/VCTK-Corpus/wav48"
+    source_spk = "p225"
+    src_wav_paths = glob(f'{data_root}/{source_spk}/*.wav') # modified to absolute wavs path, can select any unseen speakers
     src_wav_paths = select_wavs(src_wav_paths)
     
-    tar1_wav_paths = glob('/Dataset/VCTK-Corpus/wav48_silence_trimmed/p231/*mic1.flac') # can select any unseen speakers
-    tar2_wav_paths = glob('/Dataset/VCTK-Corpus/wav48_silence_trimmed/p243/*mic1.flac') # can select any unseen speakers
+    
+    tar1_wav_paths = glob(f'{data_root}/p231/*.wav') # can select any unseen speakers
+    tar2_wav_paths = glob(f'{data_root}/p243/*.wav') # can select any unseen speakers
     # tar1_wav_paths = select_wavs(tar1_wav_paths)
     # tar2_wav_paths = select_wavs(tar2_wav_paths)
     tar1_wav_paths = [sorted(tar1_wav_paths)[0]]
@@ -84,7 +93,7 @@ def convert(cfg):
     tmp = cfg.checkpoint.split('/')
     steps = tmp[-1].split('-')[-1].split('.')[0]
     out_dir = f'test/{tmp[-3]}-{tmp[-2]}-{steps}'
-    out_dir = Path(utils.to_absolute_path(out_dir))
+    out_dir = Path(data_root + out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -99,7 +108,8 @@ def convert(cfg):
     decoder.to(device)
 
     print("Load checkpoint from: {}:".format(cfg.checkpoint))
-    checkpoint_path = utils.to_absolute_path(cfg.checkpoint)
+    # checkpoint_path = utils.to_absolute_path(cfg.checkpoint)
+    checkpoint_path = abs_path + cfg.checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
     encoder.load_state_dict(checkpoint["encoder"])
     encoder_spk.load_state_dict(checkpoint["encoder_spk"])
@@ -109,11 +119,12 @@ def convert(cfg):
     encoder_spk.eval()
     decoder.eval()
     
-    mel_stats = np.load('./data/mel_stats.npy')
+    mel_stats = np.load(abs_path + 'data/mel_stats.npy')
     mean = mel_stats[0]
     std = mel_stats[1]
     feat_writer = kaldiio.WriteHelper("ark,scp:{o}.ark,{o}.scp".format(o=str(out_dir)+'/feats.1'))
     for i, src_wav_path in tqdm(enumerate(src_wav_paths, 1)):
+        src_wav_path = src_wav_path[:-13] + "/" + src_wav_path[-12:]
         if i>10:
             break
         mel, lf0 = extract_logmel(src_wav_path, mean, std)
@@ -141,6 +152,8 @@ def convert(cfg):
             feat_writer[out_filename+'_src'] = mel.squeeze(0).cpu().numpy().T
             feat_writer[out_filename+'_ref'] = ref_mel.squeeze(0).cpu().numpy().T
             
+        print("src_wav_path", src_wav_path)
+        print("out_dir", out_dir)
         subprocess.call(['cp', src_wav_path, out_dir])
     
     feat_writer.close()

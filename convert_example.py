@@ -112,10 +112,73 @@ def convert(args):
     subprocess.call(cmd)
 
 if __name__ == "__main__":
+    mode = 1
+    # 0: both unseen; 1: both seen
     parser = argparse.ArgumentParser()
-    parser.add_argument('--source_wav', '-s', type=str, required=True)
-    parser.add_argument('--reference_wav', '-r', type=str, required=True)
-    parser.add_argument('--converted_wav_path', '-c', type=str, default='converted')
-    parser.add_argument('--model_path', '-m', type=str, required=True)
-    args = parser.parse_args()
-    convert(args)
+    parser = argparse.ArgumentParser(conflict_handler='resolve')
+    parser.add_argument('--model_path', '-m', type=str, required=False, default="checkpoints/useCSMITrue_useCPMITrue_usePSMITrue_useAmpFalse/model.ckpt-500.pt") 
+    
+    if mode == 0:
+        speaker_names = []
+        folder_path = 'data/test/lf0'
+        data_root = "Dataset/VCTK-Corpus/wav48/"
+        
+        for file in os.listdir(folder_path):
+            speaker_names.append(str(file))
+        
+        # reference is the speaker (pair[0]), source is the content (pair[1]) 
+        speaker_content_pairs = [(speaker_names[i], speaker_names[i+1]) for i in range(0, len(speaker_names), 2)]
+        
+        for pair in speaker_content_pairs:
+            try:
+                reference_root = data_root + pair[0] + "/" + pair[0] + "_002.wav"
+                parser.add_argument('--reference_wav', '-r', type=str, required=False, default=reference_root)
+            except Exception as e:
+                reference_root = data_root + pair[0] + "/" + pair[0] + "_003.wav"
+                parser.add_argument('--reference_wav', '-r', type=str, required=False, default=reference_root)            
+                continue
+            for i in range(10, 20):
+                try:
+                    source_root = data_root + pair[1] + "/" + pair[1] + "_0" + str(i) + ".wav"
+                    parser.add_argument('--source_wav', '-s', type=str, required=False, default=source_root)
+                    converted_root = 'converted/unseen_content_unseen_speaker/' + pair[0] + "_" + pair[1] + "_test_" + str(i-9)
+                    parser.add_argument('--converted_wav_path', '-c', type=str, default=converted_root)
+                    args = parser.parse_args()
+                    convert(args)
+                except Exception as e:
+                    print("Error:", e)
+                    continue
+    
+    if mode == 1:
+        speaker_names = []
+        folder_path = 'data/train/lf0'
+        data_root = "Dataset/VCTK-Corpus/wav48/"
+        
+        for file in os.listdir(folder_path):
+            speaker_names.append(str(file))
+        
+        speaker_names = speaker_names[:20]
+        print(len(speaker_names))
+        
+        # reference is the speaker (pair[0]), source is the content (pair[1]) 
+        speaker_content_pairs = [(speaker_names[i], speaker_names[i+1]) for i in range(0, len(speaker_names), 2)]
+        
+        for pair in speaker_content_pairs:
+            try:
+                reference_root = data_root + pair[0] + "/" + pair[0] + "_002.wav"
+                parser.add_argument('--reference_wav', '-r', type=str, required=False, default=reference_root)
+            except Exception as e:
+                reference_root = data_root + pair[0] + "/" + pair[0] + "_003.wav"
+                parser.add_argument('--reference_wav', '-r', type=str, required=False, default=reference_root)            
+                continue
+            for i in range(10, 20):
+                try:
+                    source_root = data_root + pair[1] + "/" + pair[1] + "_0" + str(i) + ".wav"
+                    parser.add_argument('--source_wav', '-s', type=str, required=False, default=source_root)
+                    converted_root = 'converted/seen_content_seen_speaker/' + pair[0] + "_" + pair[1] + "_test_" + str(i-9)
+                    parser.add_argument('--converted_wav_path', '-c', type=str, default=converted_root)
+                    args = parser.parse_args()
+                    convert(args)
+                except Exception as e:
+                    print("Error:", e)
+                    continue
