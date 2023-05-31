@@ -155,6 +155,25 @@ class MultiHeadAttention(nn.Module):
         output = self.dropout(output) + residual
         return output, attn
 
+class Conv1dGLU(nn.Module):
+    '''
+    Conv1d + GLU(Gated Linear Unit) with residual connection.
+    For GLU refer to https://arxiv.org/abs/1612.08083 paper.
+    '''
+    def __init__(self, in_channels, out_channels, kernel_size, dropout):
+        super(Conv1dGLU, self).__init__()
+        self.out_channels = out_channels
+        self.conv1 = ConvNorm(in_channels, 2*out_channels, kernel_size=kernel_size)
+        self.dropout = nn.Dropout(dropout)
+            
+    def forward(self, x):
+        residual = x
+        x = self.conv1(x)
+        x1, x2 = torch.split(x, split_size_or_sections=self.out_channels, dim=1)
+        x = x1 * torch.sigmoid(x2)
+        x = residual + self.dropout(x)
+        return x
+
 # class StyleEncoder(nn.Module):
 #     '''
 #     reference from speaker-encoder of AdaIN-VC: https://github.com/jjery2243542/adaptive_voice_conversion/blob/master/model.py

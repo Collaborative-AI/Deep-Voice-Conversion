@@ -118,7 +118,7 @@ def mi_second_forward(mels, prompts, mels_id, encoder_content, cpc, encoder_styl
 
     # Cross-Modal Attention Shift between Prompt Embedding and Content Embedding    
     # Decode the audio with Content Embedding and Prompt Embedding
-    recon_loss, pred_mels = decoder(z, z.size(2), prompt_embs, mels.transpose(1,2))
+    recon_loss, pred_mels = decoder(z, prompt_embs, mels.transpose(1,2))
     
     loss = recon_loss + cpc_loss + vq_loss + contrastive_loss
     

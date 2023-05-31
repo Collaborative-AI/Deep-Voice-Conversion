@@ -40,7 +40,7 @@ class CrossModalDecoder(nn.Module):
         max_mel_len = np.max(batch["mel_len"]).astype(np.int32)
         return sid, text, mel_target, D, log_D, f0, energy, src_len, mel_len, max_src_len, max_mel_len
 
-    def forward(self, src_seq, src_len, style_embedding, mel_target, mel_len=None, 
+    def forward(self, src_seq, style_embedding, mel_target, src_len = 64, mel_len=None, 
                     d_target=None, p_target=None, e_target=None, max_src_len=None, max_mel_len=None):
         src_mask = get_mask_from_lengths(src_len, max_src_len)
         mel_mask = get_mask_from_lengths(mel_len, max_mel_len) if mel_len is not None else None
@@ -54,7 +54,7 @@ class CrossModalDecoder(nn.Module):
         # Deocoding
         mel_prediction, _ = self.decoder(encoder_output, style_embedding, mel_mask)
 
-        return mel_prediction, src_embedded, src_mask, mel_mask, mel_len
+        return ReconstructionLoss(), mel_prediction # src_embedded, src_mask, mel_mask, mel_len
 
     # def inference(self, style_vector, src_seq, src_len=None, max_src_len=None, return_attn=False):
     #     src_mask = get_mask_from_lengths(src_len, max_src_len)
@@ -73,9 +73,6 @@ class CrossModalDecoder(nn.Module):
     #         return enc_slf_attn, dec_slf_attn
 
     #     return mel_output, src_embedded, d_prediction, p_prediction, e_prediction, src_mask, mel_mask, mel_len
-
-    def get_criterion(self):
-        return ReconstructionLoss()
 
 class ReconstructionLoss():
     pass
@@ -137,7 +134,7 @@ class CrossModalShift(nn.Module):
             slf_attn.append(enc_slf_attn)
         # last fc
         enc_output = self.fc_out(enc_output)
-        return enc_output, src_embedded, slf_attn
+        return enc_output, content_embedding, slf_attn
 
 class Prenet(nn.Module):
     ''' Prenet '''
