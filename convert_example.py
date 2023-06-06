@@ -67,6 +67,7 @@ def convert(args):
     os.makedirs(out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+#initiate neural network models
     encoder = Encoder(in_channels=80, channels=512, n_embeddings=512, z_dim=64, c_dim=256)
     encoder_lf0 = Encoder_lf0()
     encoder_spk = Encoder_spk()
@@ -75,13 +76,13 @@ def convert(args):
     encoder_lf0.to(device)
     encoder_spk.to(device)
     decoder.to(device)
-
+#loads the checkpoint of the trained models from the given model path
     checkpoint_path = args.model_path
     checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
     encoder.load_state_dict(checkpoint["encoder"])
     encoder_spk.load_state_dict(checkpoint["encoder_spk"])
     decoder.load_state_dict(checkpoint["decoder"])
-
+#set to evaluation mode
     encoder.eval()
     encoder_spk.eval()
     decoder.eval()
@@ -89,9 +90,11 @@ def convert(args):
     mel_stats = np.load('./mel_stats/stats.npy')
     mean = mel_stats[0]
     std = mel_stats[1]
-    feat_writer = kaldiio.WriteHelper("ark,scp:{o}.ark,{o}.scp".format(o=str(out_dir)+'/feats.1'))
+    feat_writer = kaldiio.WriteHelper("ark,scp:{o}.ark,{o}.scp".format(o=str(out_dir)+'/feats.1')) #write the converted source and ref features to kaldi-compatible files
+    #extract mel and lfo from the source and reference WAV files
     src_mel, src_lf0 = extract_logmel(src_wav_path, mean, std)
     ref_mel, _ = extract_logmel(ref_wav_path, mean, std)
+    #converts to tensor and moves to device
     src_mel = torch.FloatTensor(src_mel.T).unsqueeze(0).to(device)
     src_lf0 = torch.FloatTensor(src_lf0).unsqueeze(0).to(device)
     ref_mel = torch.FloatTensor(ref_mel.T).unsqueeze(0).to(device)
