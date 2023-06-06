@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 
-
 import soundfile as sf
 
 from model_encoder import Encoder, Encoder_lf0
@@ -42,18 +41,21 @@ def extract_logmel(wav_path, mean, std, sr=16000):
                 fmin=80,
                 fmax=7600,
             )
+    # compute mel-spectrogram feature from an audio waveform
+    #result: 2D array
     
-    mel = (mel - mean) / (std + 1e-8)
+    #pitch analysis
+    mel = (mel - mean) / (std + 1e-8) #normalizing the mel-spectrogram feature
     tlen = mel.shape[0]
-    frame_period = 160/fs*1000
-    f0, timeaxis = pw.dio(wav.astype('float64'), fs, frame_period=frame_period)
-    f0 = pw.stonemask(wav.astype('float64'), f0, timeaxis, fs)
-    f0 = f0[:tlen].reshape(-1).astype('float32')
+    frame_period = 160/fs*1000 
+    f0, timeaxis = pw.dio(wav.astype('float64'), fs, frame_period=frame_period) #raw pitch extractor
+    f0 = pw.stonemask(wav.astype('float64'), f0, timeaxis, fs) #pitch refinement
+    f0 = f0[:tlen].reshape(-1).astype('float32') #match the length of tlen, result: 1D array
     nonzeros_indices = np.nonzero(f0)
     lf0 = f0.copy()
     lf0[nonzeros_indices] = np.log(f0[nonzeros_indices]) # for f0(Hz), lf0 > 0 when f0 != 0
     mean, std = np.mean(lf0[nonzeros_indices]), np.std(lf0[nonzeros_indices])
-    lf0[nonzeros_indices] = (lf0[nonzeros_indices] - mean) / (std + 1e-8)
+    lf0[nonzeros_indices] = (lf0[nonzeros_indices] - mean) / (std + 1e-8) #normalization of lf0 values
     return mel, lf0
 
 
