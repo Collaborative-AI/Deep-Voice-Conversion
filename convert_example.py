@@ -3,9 +3,9 @@ import numpy as np
 
 import soundfile as sf
 
-from model_encoder import Encoder, Encoder_lf0
-from model_decoder import Decoder_ac
-from model_encoder import SpeakerEncoder as Encoder_spk
+from models.model_encoder import ContentEncoder, StyleEncoder
+from models.model_decoder import Decoder_ac_without_lf0
+from models.model_encoder_contrastive import ASE
 import os
 
 import subprocess
@@ -68,23 +68,23 @@ def convert(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #initiate neural network models
-    encoder = Encoder(in_channels=80, channels=512, n_embeddings=512, z_dim=64, c_dim=256)
-    encoder_lf0 = Encoder_lf0()
-    encoder_spk = Encoder_spk()
-    decoder = Decoder_ac(dim_neck=64)
+    encoder = ContentEncoder(in_channels=80, channels=512, n_embeddings=512, z_dim=64, c_dim=256)
+    encoder_style = StyleEncoder()
+    encoder_ase = ASE()
+    decoder = Decoder_ac_without_lf0(dim_neck=64)
     encoder.to(device)
-    encoder_lf0.to(device)
-    encoder_spk.to(device)
+    encoder_style.to(device)
+    encoder_ase.to(device)
     decoder.to(device)
 #loads the checkpoint of the trained models from the given model path
     checkpoint_path = args.model_path
     checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
     encoder.load_state_dict(checkpoint["encoder"])
-    encoder_spk.load_state_dict(checkpoint["encoder_spk"])
+    encoder_style.load_state_dict(checkpoint["encoder_style"])
     decoder.load_state_dict(checkpoint["decoder"])
 #set to evaluation mode
     encoder.eval()
-    encoder_spk.eval()
+    encoder_style.eval()
     decoder.eval()
     
     mel_stats = np.load('./mel_stats/stats.npy')
@@ -101,9 +101,9 @@ def convert(args):
     out_filename = os.path.basename(src_wav_path).split('.')[0] 
     with torch.no_grad():
         z, _, _, _ = encoder.encode(src_mel)
-        lf0_embs = encoder_lf0(src_lf0)
-        spk_emb = encoder_spk(ref_mel)
-        output = decoder(z, lf0_embs, spk_emb)
+        style_embs = encoder_style(src_lf0)
+        style_emb = encoder_style(ref_mel)
+        output = decoder(z, style_embs, style_emb)
         
         feat_writer[out_filename+'_converted'] = output.squeeze(0).cpu().numpy()
         feat_writer[out_filename+'_source'] = src_mel.squeeze(0).cpu().numpy().T
@@ -132,9 +132,9 @@ if __name__ == "__main__":
             speaker_names.append(str(file))
         
         # reference is the speaker (pair[0]), source is the content (pair[1]) 
-        speaker_content_pairs = [(speaker_names[i], speaker_names[i+1]) for i in range(0, len(speaker_names), 2)]
+        style_content_pairs = [(speaker_names[i], speaker_names[i+1]) for i in range(0, len(speaker_names), 2)]
         
-        for pair in speaker_content_pairs:
+        for pair in style_content_pairs:
             try:
                 reference_root = data_root + pair[0] + "/" + pair[0] + "_002.wav"
                 parser.add_argument('--reference_wav', '-r', type=str, required=False, default=reference_root)
@@ -155,20 +155,20 @@ if __name__ == "__main__":
                     continue
     
     if mode == 1:
-        speaker_names = []
+        style_names = []
         folder_path = 'data/train/lf0'
         data_root = "Dataset/VCTK-Corpus/wav48/"
         
         for file in os.listdir(folder_path):
-            speaker_names.append(str(file))
+            style_names.append(str(file))
         
-        speaker_names = speaker_names[:20]
-        print(len(speaker_names))
+        style_names = style_names[:20]
+        print(len(style_names))
         
         # reference is the speaker (pair[0]), source is the content (pair[1]) 
-        speaker_content_pairs = [(speaker_names[i], speaker_names[i+1]) for i in range(0, len(speaker_names), 2)]
+        style_content_pairs = [(style_names[i], style_names[i+1]) for i in range(0, len(style_names), 2)]
         
-        for pair in speaker_content_pairs:
+        for pair in style_content_pairs:
             try:
                 reference_root = data_root + pair[0] + "/" + pair[0] + "_002.wav"
                 parser.add_argument('--reference_wav', '-r', type=str, required=False, default=reference_root)

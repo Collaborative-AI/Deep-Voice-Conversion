@@ -34,6 +34,7 @@ def save_checkpoint(encoder_content, cpc, encoder_style, model_ase, \
     else:
         amp_state_dict = None
     checkpoint_state = {
+### Modified here
         "encoder_content": encoder_content.state_dict(),
         # "encoder_lf0": encoder_lf0.state_dict(),
         "model_ase": model_ase.state_dict(),

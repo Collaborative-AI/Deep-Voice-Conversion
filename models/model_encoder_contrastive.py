@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
-from models.TextEncoder import BertEncoder
-from models.BERT_Config import MODELS
+from TextEncoder import BertEncoder
+from BERT_Config import MODELS
 
 
 def l2norm(X):
