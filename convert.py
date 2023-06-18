@@ -8,9 +8,9 @@ from tqdm import tqdm
 
 import soundfile as sf
 
-from model_encoder import Encoder, Encoder_lf0
-from model_decoder import Decoder_ac
-from model_encoder import SpeakerEncoder as Encoder_spk
+from models.model_encoder import ContentEncoder, StyleEncoder
+from models.model_decoder import Decoder_ac_without_lf0
+from models.model_encoder_contrastive import ASE
 import os
 import random
 
@@ -98,13 +98,13 @@ def convert(cfg):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    encoder = Encoder(**cfg.model.encoder)
-    encoder_lf0 = Encoder_lf0()
-    encoder_spk = Encoder_spk()
-    decoder = Decoder_ac(dim_neck=64)
+    encoder = ASE(**cfg.model.encoder)
+    encoder_content = ContentEncoder()
+    styleEconder = StyleEncoder()
+    decoder = Decoder_ac_without_lf0(dim_neck=64)
     encoder.to(device)
-    encoder_lf0.to(device)
-    encoder_spk.to(device)
+    encoder_content.to(device)
+    styleEconder.to(device)
     decoder.to(device)
 
     print("Load checkpoint from: {}:".format(cfg.checkpoint))
@@ -112,11 +112,11 @@ def convert(cfg):
     checkpoint_path = abs_path + cfg.checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
     encoder.load_state_dict(checkpoint["encoder"])
-    encoder_spk.load_state_dict(checkpoint["encoder_spk"])
+    StyleEncoder.load_state_dict(checkpoint["StyleEncoder"])
     decoder.load_state_dict(checkpoint["decoder"])
 
     encoder.eval()
-    encoder_spk.eval()
+    StyleEncoder.eval()
     decoder.eval()
     
     mel_stats = np.load(abs_path + 'data/mel_stats.npy')
@@ -143,9 +143,9 @@ def convert(cfg):
         out_filename = os.path.basename(src_wav_path).split('.')[0] 
         with torch.no_grad():
             z, _, _, _ = encoder.encode(mel)
-            lf0_embs = encoder_lf0(lf0)
-            spk_embs = encoder_spk(ref_mel)
-            output = decoder(z, lf0_embs, spk_embs)
+            content_embs = encoder_content(lf0)
+            style_embs = styleEconder(ref_mel)
+            output = decoder(z, content_embs, style_embs)
             
             logmel = output.squeeze(0).cpu().numpy()
             feat_writer[out_filename] = logmel
