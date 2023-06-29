@@ -7,16 +7,15 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-import yaml
 
 
 from dataset import CPCDataset_sameSeq as CPCDataset
 from scheduler import WarmupScheduler
 from models.model_encoder import ContentEncoder, CPCLoss_sameSeq, StyleEncoder
-from models.model_decoder import Decoder_ac_without_lf0
 from models.model_encoder_contrastive import ASE
-from models.cross_modal_decoder import CrossModalDecoder
-from models.contrastive_loss import NTXent
+from models.cross_modal_decoder import CrossModalDecoder, get_mask_from_lengths
+from models.model_decoder import Decoder_ac_without_lf0 as DecoderWaveGAN
+# from models.contrastive_loss import NTXent
 from models.mi_estimators import CLUBSample_group
 
 # import apex.amp as amp
@@ -29,10 +28,6 @@ np.random.seed(137)
 def save_checkpoint(encoder_content, cpc, encoder_style, model_ase, \
                     cs_mi_net, decoder, \
                     optimizer, optimizer_cs_mi_net, scheduler, epoch, checkpoint_dir, cfg):
-    if cfg.use_amp:
-        amp_state_dict = amp.state_dict()
-    else:
-        amp_state_dict = None
     checkpoint_state = {
 ### Modified here
         "encoder_content": encoder_content.state_dict(),
@@ -49,7 +44,7 @@ def save_checkpoint(encoder_content, cpc, encoder_style, model_ase, \
         # "optimizer_ps_mi_net": optimizer_ps_mi_net.state_dict(),
         # "optimizer_cp_mi_net": optimizer_cp_mi_net.state_dict(),
         "scheduler": scheduler.state_dict(),
-        "amp": amp_state_dict,
+        # "amp": amp_state_dict,
         "epoch": epoch
     }
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
@@ -58,22 +53,16 @@ def save_checkpoint(encoder_content, cpc, encoder_style, model_ase, \
     print("Saved checkpoint: {}".format(checkpoint_path.stem))
 
 def mi_first_forward(mels, encoder_content, encoder_style, cs_mi_net, optimizer_cs_mi_net, cfg):
-    optimizer_cs_mi_net.zero_grad()
-    # optimizer_ps_mi_net.zero_grad()
-    # optimizer_cp_mi_net.zero_grad()
-    z, _, _, _, _ = encoder_content(mels) # content encoder
+    optimizer_cs_mi_net.zero_grad()  
+    style_mask = get_mask_from_lengths(mels)
+    z, _, _, _, _ = encoder_content(mels) # z: bz x 64 x 64; bz x time x frequency
     z = z.detach()
-    # lf0_embs = encoder_lf0(lf0).detach() # bz x 128 x 1; frequency contour, only unsqueeze operation is performed
-    style_embs = encoder_style(mels).detach() # bz x 256 x 1
+    style_embs = encoder_style(mels.transpose(1,2), style_mask).detach() # bz x 256 x 1
     
     # Whether to Optimize the Mutual Information Loss * 3
     if cfg.use_CSMI:
         lld_cs_loss = -cs_mi_net.loglikeli(style_embs, z)
-        if cfg.use_amp:
-            with amp.scale_loss(lld_cs_loss, optimizer_cs_mi_net) as sl:
-                sl.backward()
-        else:
-            lld_cs_loss.backward()
+        lld_cs_loss.backward()
         optimizer_cs_mi_net.step()
     else:
         lld_cs_loss = torch.tensor(0.)
@@ -105,17 +94,27 @@ def mi_first_forward(mels, encoder_content, encoder_style, cs_mi_net, optimizer_
 
 def mi_second_forward(mels, prompts, mels_id, encoder_content, cpc, encoder_style, model_ase, cs_mi_net, decoder, cfg, optimizer, scheduler):
     optimizer.zero_grad()
-    z, c, _, vq_loss, perplexity = encoder_content(mels) # z: bz x 64 x 64
+    # mels: bz x 80 x 128; bz x frequency x time
+    
+    style_mask = get_mask_from_lengths(mels)
+     
+    z, c, _, vq_loss, perplexity = encoder_content(mels) # z: bz x 128/2 x 64; bz x time x frequency
+    print("Content Embedding Shape: ", z.shape)
+    print("CPC Content Embedding Shape: ", c.shape)
     cpc_loss, accuracy = cpc(z, c)
-    style_embs = encoder_style(mels) # bz x 1024 x 1
+    style_embs = encoder_style(mels.transpose(1,2), style_mask) # bz x 256 x 1
+    print("Style Embedding Shape: ", style_embs.shape)
     
     # # decode the linguistic content from the content embedding to fix a distribution for the mutual information loss 
     # linguistic_content = vocoder_content()
     # content_loss = F.cross_entropy(linguistic_content.transpose(1,2), mels_id)
     
+    
     # Map the Prompt Embedding and the Style Embedding to the same space
-    style_embs, prompt_embs = model_ase(style_embs, prompts) # prompt_embs: bz x 512 x 1; style_embs: bz x 512 x 1
-    contrastive_loss = NTXent(style_embs, prompt_embs, mels_id)
+    print("Mapping in to the same space...")
+    contrastive_loss, style_embs, prompt_embs = model_ase(style_embs, prompts, mels_id) # prompt_embs: bz x 256 x 1; style_embs: bz x 256 x 1
+    print("Style Embedding Shape: ", style_embs.shape)
+    print("Prompt Embedding Shape: ", prompt_embs.shape)
 
     # Cross-Modal Attention Shift between Prompt Embedding and Content Embedding    
     # Decode the audio with Content Embedding and Prompt Embedding
@@ -156,7 +155,6 @@ def calculate_eval_loss(mels, prompts, mels_id, \
     with torch.no_grad():
         z, c, z_beforeVQ, vq_loss, perplexity = encoder_content(mels)
         style_embs = encoder_style(mels)
-        style_embs, prompt_embs = model_ase(style_embs, prompts)
         
         if cfg.use_CSMI:
             lld_cs_loss = -cs_mi_net.loglikeli(style_embs, z)
@@ -166,8 +164,8 @@ def calculate_eval_loss(mels, prompts, mels_id, \
             mi_cs_loss = torch.tensor(0.)
         
         # z, c, z_beforeVQ, vq_loss, perplexity = encoder(mels)
-        contrastive_loss = NTXent(style_embs, prompt_embs, mels_id)
         cpc_loss, accuracy = cpc(z, c)
+        contrastive_loss, style_embs, prompt_embs = model_ase(style_embs, prompts, mels_id)
         recon_loss, pred_mels = decoder(z, prompt_embs, mels.transpose(1,2))
         
         # if cfg.use_CPMI:
@@ -257,21 +255,19 @@ def train_model(cfg):
     print(device)
     
     # define model
-    encoder_content = ContentEncoder(cfg.model.encoder_content)
-    cpc = CPCLoss_sameSeq(cfg.model.cpc)
+    encoder_content = ContentEncoder(**cfg.model.encoder_content)
+    cpc = CPCLoss_sameSeq(**cfg.model.cpc)
     encoder_style = StyleEncoder(cfg.model.encoder_style)
     model_ase = ASE(cfg.model.contrastive_model)
     cs_mi_net = CLUBSample_group(256, cfg.model.encoder_content.z_dim, 512)
-    decoder = CrossModalDecoder(cfg.model.cross_modal_decoder)
+    # decoder = CrossModalDecoder(cfg.model.cross_modal_decoder)
+    decoder = DecoderWaveGAN(dim_neck=cfg.model.encoder_content.z_dim, use_l1_loss=True)
     
     encoder_content.to(device)
     cpc.to(device)
-    # encoder_lf0.to(device)
     encoder_style.to(device)
     model_ase.to(device)
     cs_mi_net.to(device)
-    # ps_mi_net.to(device)
-    # cp_mi_net.to(device)
     decoder.to(device)
 
     optimizer = optim.Adam(
@@ -347,16 +343,16 @@ def train_model(cfg):
         average_lld_cs_loss = average_mi_cs_loss = 0
 
         # TO DO: Change the formart of dalaloader to (mels, prompts, mels_id)
-        for i, (mels, prompts, audio_ids) in enumerate(dataloader, 1):
+        for i, (mels, prompts, mels_ids) in enumerate(dataloader, 1):
             # lf0 = lf0.to(device)
-            mels = mels.to(device) # (bs, 80, 128)
-            audio_ids = audio_ids.to(device)
+            mels = mels.to(device) # (bs, 80, 128); (bs, frequency/mel_channels, time/frames)
+            mels_ids = mels_ids.to(device)
             if cfg.use_CSMI:
                 optimizer_cs_mi_net, lld_cs_loss= mi_first_forward(mels, encoder_content, encoder_style, model_ase, cs_mi_net, optimizer_cs_mi_net, cfg)
             else:
                 lld_cs_loss = torch.tensor(0.)
                 
-            optimizer, recon_loss, vq_loss, cpc_loss, accuracy, perplexity, mi_cs_loss, contrastive_loss = mi_second_forward(mels, prompts, mels_id, \
+            optimizer, recon_loss, vq_loss, cpc_loss, accuracy, perplexity, mi_cs_loss, contrastive_loss = mi_second_forward(mels, prompts, mels_ids, \
                                                                                                             encoder_content, cpc, \
                                                                                                             encoder_style, model_ase, cs_mi_net, \
                                                                                                             decoder, cfg, \
@@ -386,8 +382,7 @@ def train_model(cfg):
               .format(epoch, global_step, average_recon_loss, average_cpc_loss, average_vq_loss, average_perplexity, average_lld_cs_loss, average_mi_cs_loss, average_contrastive_loss)+'\n')
         results_txt.write(' '.join([str(cpc_acc) for cpc_acc in average_accuracies])+'\n')
         results_txt.close()
-        scheduler.step()
-        
+        scheduler.step()        
         
         if epoch % cfg.training.log_interval == 0 and epoch != start_epoch:
             eval_model(epoch, checkpoint_dir, device, valid_dataloader, encoder_content, cpc, encoder_style, model_ase, cs_mi_net, decoder, cfg)

@@ -259,7 +259,7 @@ class Conv1dGLU(nn.Module):
 #         return out
 
 class StyleEncoder(nn.Module):
-    ''' MelStyleEncoder '''
+    ''' StyleEncoder '''
     def __init__(self, config):
         super(StyleEncoder, self).__init__()
         self.in_dim = config.n_mel_channels 
@@ -303,15 +303,15 @@ class StyleEncoder(nn.Module):
         slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1) if mask is not None else None
         
         # spectral
-        x = self.spectral(x)
+        x = self.spectral(x) # bz x time x frequency
         # temporal
         x = x.transpose(1,2)
-        x = self.temporal(x)
+        x = self.temporal(x) # bz x frequency x time
         x = x.transpose(1,2)
         # self-attention
         if mask is not None:
             x = x.masked_fill(mask.unsqueeze(-1), 0)
-        x, _ = self.slf_attn(x, mask=slf_attn_mask)
+        x, _ = self.slf_attn(x, mask=slf_attn_mask) # bz x time x frequency
         # fc
         x = self.fc(x)
         # temoral average pooling
@@ -354,10 +354,10 @@ class ContentEncoder(nn.Module):
         return z, c, z_beforeVQ, indices
 
     def forward(self, mels):
-        z = self.conv(mels.float()) # (bz, 80, 128) -> (bz, 512, 128/2); (bz, time, mel_frequency)
-        z_beforeVQ = self.encoder(z.transpose(1, 2)) # (bz, 512, 128/2) -> (bz, 128/2, 512) -> (bz, 128/2, 64)
-        z, r, loss, perplexity = self.codebook(z_beforeVQ) # z: (bz, 128/2, 64)
-        c, _ = self.rnn(z) # (64, 140/2, 64) -> (64, 140/2, 256)
+        z = self.conv(mels.float()) # bz x 80 x 128 -> bz x 512 x 128/2 ; bz x frequency x time
+        z_beforeVQ = self.encoder(z.transpose(1, 2)) # bz x 512 x 128/2 -> bz x 128/2 x 512 -> bz x 128/2 x 64; bz x time x frequency
+        z, r, loss, perplexity = self.codebook(z_beforeVQ) # z: bz x 128/2 x 64; bz x time x frequency
+        c, _ = self.rnn(z) 
         return z, c, z_beforeVQ, loss, perplexity
     
 class VQEmbeddingEMA(nn.Module):

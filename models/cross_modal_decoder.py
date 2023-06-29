@@ -8,7 +8,8 @@ from Modules import Mish, LinearNorm, ConvNorm, Conv1dGLU, \
 # from models.VarianceAdaptor import VarianceAdaptor
 # from models.Loss import StyleSpeechLoss
 
-def get_mask_from_lengths(lengths, max_len=None):
+def get_mask_from_lengths(input, max_len=None):
+    lengths = torch.count_nonzero(input, dim=-1)
     batch_size = lengths.shape[0]
     if max_len is None:
         max_len = torch.max(lengths).item()
@@ -22,39 +23,39 @@ class CrossModalDecoder(nn.Module):
     ''' StyleSpeech '''
     def __init__(self, config):
         super(CrossModalDecoder, self).__init__()
-        self.encoder = CrossModalShift(config)
+        self.cross_modal_shift = CrossModalShift(config)
         # self.variance_adaptor = VarianceAdaptor(config)
-        self.decoder = Decoder(config)
+        self.decoder = Decoder(**config.decoder)
         
-    def parse_batch(self, batch):
-        sid = torch.from_numpy(batch["sid"]).long().cuda()
-        text = torch.from_numpy(batch["text"]).long().cuda()
-        mel_target = torch.from_numpy(batch["mel_target"]).float().cuda()
-        D = torch.from_numpy(batch["D"]).long().cuda()
-        log_D = torch.from_numpy(batch["log_D"]).float().cuda()
-        f0 = torch.from_numpy(batch["f0"]).float().cuda()
-        energy = torch.from_numpy(batch["energy"]).float().cuda()
-        src_len = torch.from_numpy(batch["src_len"]).long().cuda()
-        mel_len = torch.from_numpy(batch["mel_len"]).long().cuda()
-        max_src_len = np.max(batch["src_len"]).astype(np.int32)
-        max_mel_len = np.max(batch["mel_len"]).astype(np.int32)
-        return sid, text, mel_target, D, log_D, f0, energy, src_len, mel_len, max_src_len, max_mel_len
+    # def parse_batch(self, batch):
+    #     sid = torch.from_numpy(batch["sid"]).long().cuda()
+    #     text = torch.from_numpy(batch["text"]).long().cuda()
+    #     mel_target = torch.from_numpy(batch["mel_target"]).float().cuda()
+    #     D = torch.from_numpy(batch["D"]).long().cuda()
+    #     log_D = torch.from_numpy(batch["log_D"]).float().cuda()
+    #     f0 = torch.from_numpy(batch["f0"]).float().cuda()
+    #     energy = torch.from_numpy(batch["energy"]).float().cuda()
+    #     src_len = torch.from_numpy(batch["src_len"]).long().cuda()
+    #     mel_len = torch.from_numpy(batch["mel_len"]).long().cuda()
+    #     max_src_len = np.max(batch["src_len"]).astype(np.int32)
+    #     max_mel_len = np.max(batch["mel_len"]).astype(np.int32)
+    #     return sid, text, mel_target, D, log_D, f0, energy, src_len, mel_len, max_src_len, max_mel_len
 
-    def forward(self, src_seq, style_embedding, mel_target, src_len = 64, mel_len=None, 
-                    d_target=None, p_target=None, e_target=None, max_src_len=None, max_mel_len=None):
-        src_mask = get_mask_from_lengths(src_len, max_src_len)
-        mel_mask = get_mask_from_lengths(mel_len, max_mel_len) if mel_len is not None else None
+    def forward(self, content_embed, style_embed, mel_target):
+        # content_embed: bz x 128/2 x 64; bz x time x frequency
+        # style_embed: bz x 256 x 1;
+        content_mask = get_mask_from_lengths(content_embed)
         
         # Cross Modal Shifting
-        encoder_output, src_embedded, _ = self.encoder(src_seq, style_embedding, src_mask)
+        encoder_output, content_embed, _ = self.cross_modal_shift(content_embed, style_embed, content_mask) # enc_output: bz x 128/2 x 64; bz x time x frequency
         # # Variance Adaptor; Do I need This?
         # acoustic_adaptor_output, d_prediction, p_prediction, e_prediction, mel_len, mel_mask = self.variance_adaptor(
         #         encoder_output, src_mask, mel_len, mel_mask, 
         #                 d_target, p_target, e_target, max_mel_len)
         # Deocoding
-        mel_prediction, _ = self.decoder(encoder_output, style_embedding, mel_mask)
+        reconstruction_loss, mel_prediction = self.decoder(encoder_output, mel_target)
 
-        return ReconstructionLoss(), mel_prediction # src_embedded, src_mask, mel_mask, mel_len
+        return reconstruction_loss, mel_prediction # src_embedded, src_mask, mel_mask, mel_len
 
     # def inference(self, style_vector, src_seq, src_len=None, max_src_len=None, return_attn=False):
     #     src_mask = get_mask_from_lengths(src_len, max_src_len)
@@ -74,11 +75,79 @@ class CrossModalDecoder(nn.Module):
 
     #     return mel_output, src_embedded, d_prediction, p_prediction, e_prediction, src_mask, mel_mask, mel_len
 
-class ReconstructionLoss():
-    pass
+class Postnet(nn.Module):
+    """Postnet
+        - Five 1-d convolution with 512 channels and kernel size 5
+    """
+
+    def __init__(self):
+        super(Postnet, self).__init__()
+        self.convolutions = nn.ModuleList()
+
+        self.convolutions.append(
+            nn.Sequential(
+                ConvNorm(80, 512,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='tanh'),
+                nn.BatchNorm1d(512))
+        )
+
+        for i in range(1, 5 - 1):
+            self.convolutions.append(
+                nn.Sequential(
+                    ConvNorm(512,
+                             512,
+                             kernel_size=5, stride=1,
+                             padding=2,
+                             dilation=1, w_init_gain='tanh'),
+                    nn.BatchNorm1d(512))
+            )
+
+        self.convolutions.append(
+            nn.Sequential(
+                ConvNorm(512, 80,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='linear'),
+                nn.BatchNorm1d(80))
+            )
+
+    def forward(self, x):
+        for i in range(len(self.convolutions) - 1):
+            x = torch.tanh(self.convolutions[i](x))
+
+        x = self.convolutions[-1](x)
+
+        return x  
 
 class Decoder(nn.Module):
-    pass
+    def __init__(self, channels, output_channels, z_dim):
+        super(Decoder, self).__init__()
+        self.conv = nn.ConvTranspose1d(channels, output_channels, 4, 2, 1, bias=False)
+        self.decoder = nn.Sequential(
+            nn.LayerNorm(z_dim, channels),
+            nn.ReLU(True),
+            nn.Linear(channels, channels, bias=False),
+            nn.LayerNorm(channels),
+            nn.ReLU(True),
+            nn.Linear(channels, channels, bias=False),
+            nn.LayerNorm(channels),
+            nn.ReLU(True),
+            nn.Linear(channels, channels, bias=False),
+            nn.LayerNorm(channels),
+            nn.ReLU(True),
+            nn.Linear(channels, channels, bias=False),
+            nn.LayerNorm(channels),
+            nn.ReLU(True),
+        )
+        self.postnet = Postnet()
+
+    def forward(self, x, mel_target):
+        x = self.decoder(x)
+        mel_prediction = self.conv(x.transpose(1, 2))
+        mel_prediction = self.postnet(mel_prediction)
+        return reconstruction_loss, mel_prediction
 
 class CrossModalShift(nn.Module):
     ''' Encoder '''
@@ -86,6 +155,7 @@ class CrossModalShift(nn.Module):
         super(CrossModalShift, self).__init__()
         self.max_seq_len = config.max_seq_len
         self.n_layers = config.encoder_layer
+        self.c_model = config.content_hidden
         self.d_model = config.encoder_hidden
         self.n_head = config.encoder_head
         self.d_k = config.encoder_hidden // config.encoder_head
@@ -97,7 +167,7 @@ class CrossModalShift(nn.Module):
         self.dropout = config.dropout
 
         self.src_word_emb = nn.Embedding(n_src_vocab, self.d_model, padding_idx=Constants.PAD)
-        self.prenet = Prenet(self.d_model, self.d_model, self.dropout)
+        self.prenet = Prenet(self.c_model, self.d_model)
 
         n_position = self.max_seq_len + 1
         self.position_enc = nn.Parameter(
@@ -117,7 +187,7 @@ class CrossModalShift(nn.Module):
 
         # -- Forward
         # prenet
-        content_embedding = self.prenet(content_embedding, mask)
+        content_embedding = self.prenet(content_embedding, mask) # bz x 128/2 x 64 -> bz x 128/2 x 256; bz x time x frequency
         # position encoding
         if content_embedding.shape[1] > self.max_seq_len:
             position_embedded = get_sinusoid_encoding_table(content_embedding.shape[1], self.d_model)[:content_embedding.shape[1], :].unsqueeze(0).expand(batch_size, -1, -1).to(content_embedding.device)
@@ -133,32 +203,31 @@ class CrossModalShift(nn.Module):
                 slf_attn_mask=slf_attn_mask)
             slf_attn.append(enc_slf_attn)
         # last fc
-        enc_output = self.fc_out(enc_output)
+        enc_output = self.fc_out(enc_output) # bz x 128/2 x 256 -> bz x 128/2 x 64; bz x time x frequency
         return enc_output, content_embedding, slf_attn
 
 class Prenet(nn.Module):
     ''' Prenet '''
-    def __init__(self, hidden_dim, out_dim, dropout):
+    def __init__(self, hidden_dim, out_dim):
         super(Prenet, self).__init__()
 
-        self.convs = nn.Sequential(
-            ConvNorm(hidden_dim, hidden_dim, kernel_size=3),
-            Mish(),
-            nn.Dropout(dropout),
-            ConvNorm(hidden_dim, hidden_dim, kernel_size=3),
-            Mish(),
-            nn.Dropout(dropout),
-        )
+        # self.convs = nn.Sequential(
+        #     ConvNorm(hidden_dim, hidden_dim, kernel_size=3),
+        #     Mish(),
+        #     nn.Dropout(dropout),
+        #     ConvNorm(hidden_dim, hidden_dim, kernel_size=3),
+        #     Mish(),
+        #     nn.Dropout(dropout),
+        # )
         self.fc = LinearNorm(hidden_dim, out_dim)
 
     def forward(self, input, mask=None):
-        residual = input
-        # convs
-        output = input.transpose(1,2)
-        output = self.convs(output)
-        output = output.transpose(1,2)
-        # fc & residual
-        output = self.fc(output) + residual
+        # # convs
+        # output = input.transpose(1,2)
+        # output = self.convs(output)
+        # output = output.transpose(1,2)
+        # # fc & residual
+        output = self.fc(input)
 
         if mask is not None:
             output = output.masked_fill(mask.unsqueeze(-1), 0)

@@ -217,8 +217,9 @@ class Decoder_ac_without_lf0(nn.Module):
         z = F.interpolate(z.transpose(1, 2), scale_factor=2) # (bs, 140/2, 64) -> (bs, 64, 140/2) -> (bs, 64, 140)
         z = z.transpose(1, 2) # (bs, 64, 140) -> (bs, 140, 64)
         spk_embs_exp = spk_embs.unsqueeze(1).expand(-1,z.shape[1],-1)
-        # print(z.shape, lf0_embs.shape)
+        print(z.shape, spk_embs_exp.shape)
         x = torch.cat([z, spk_embs_exp], dim=-1)
+        print(x.shape)
         
         mel_outputs = self.decoder(x)
                 

@@ -48,7 +48,7 @@ model:
       style_head: 6
       style_kernel_size: 5
       style_vector_dim: 256
-      in_channels: 80
+      n_mel_channels: 80
       dropout: 0.1
     cpc:
       sample_frames: 128
@@ -83,10 +83,11 @@ model:
     contrastive_model:
       text_encoder: bert
       joint_embed: 256
+      in_dim_audio: 256
       training:
         margin: 0.2
         freeze: True
-        loss: contrastive  # 'triplet', 'weight', 'ntxent'
+        loss: ntxent  # 'triplet', 'weight', 'ntxent'
         spec_augmentation: True
         epochs: 50
         lr: !!float 1e-4
@@ -112,14 +113,15 @@ model:
       # "mel_fmin": 0.0,
       # "mel_fmax": 8000.0,
       # "n_mel_channels": 80,
-      max_seq_len: 1000
+      max_seq_len: 64
 
-      encoder_layer: 4,
-      encoder_head: 2,
-      encoder_hidden: 256,
+      encoder_layer: 4
+      encoder_head: 2
+      encoder_hidden: 256
+      content_hidden: 64
       # "decoder_layer": 4
       # "decoder_head": 2
-      decoder_hidden: 256
+      decoder_hidden: 64
       fft_conv1d_filter_size: 1024
       fft_conv1d_kernel_size: [9, 1]
       dropout: 0.1
@@ -143,3 +145,7 @@ model:
 
       # "betas":[0.9, 0.98],
       # "eps":1e-9
+      decoder:
+        channels: 512
+        out_channels: 80
+        z_dim: 64
