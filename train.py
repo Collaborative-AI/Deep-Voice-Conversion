@@ -243,10 +243,6 @@ def eval_model(epoch, checkpoint_dir, device, valid_dataloader, encoder_content,
     
 @hydra.main(config_path="config/train.yaml")
 def train_model(cfg):
-    # with open('config/contrastive_settings.yaml', 'r') as f:
-    #     config = yaml.load(f, Loader=yaml.FullLoader)
-    # config = DotMap(config)
-    
     cfg.checkpoint_dir = f'{cfg.checkpoint_dir}/useCSMI{cfg.use_CSMI}'
     
     checkpoint_dir = Path(utils.to_absolute_path(cfg.checkpoint_dir))

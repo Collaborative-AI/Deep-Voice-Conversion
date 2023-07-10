@@ -167,7 +167,7 @@ class Decoder_without_lf0(nn.Module):
     """Decoder module:
     """
     def __init__(self, dim_neck=64, dim_emb=256, dim_pre=512):
-        super(Decoder, self).__init__()
+        super(Decoder_without_lf0, self).__init__()
         
         self.lstm1 = nn.LSTM(dim_neck+dim_emb, dim_pre, 1, batch_first=True)
         
@@ -207,7 +207,7 @@ class Decoder_without_lf0(nn.Module):
 class Decoder_ac_without_lf0(nn.Module):
     """Decoder_ac network."""
     def __init__(self, dim_neck=64, dim_emb=1024, dim_pre=512, use_l1_loss=False):
-        super(Decoder_ac, self).__init__()
+        super(Decoder_ac_without_lf0, self).__init__()
         self.use_l1_loss = use_l1_loss
         # self.encoder = Encoder(dim_neck, dim_emb, freq)
         self.decoder = Decoder_without_lf0(dim_neck, dim_emb, dim_pre)

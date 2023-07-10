@@ -32,7 +32,7 @@ class CPCDataset_sameSeq(Dataset):
         return len(self.metadata)
 
     def __getitem__(self, index):
-        csv_file_path = utils.to_absolute_path("Dataset/PromptTTS/Real_training.csv")
+        csv_file_path = ".../Dataset/PromptTTS/Real_training.csv"
         df = pd.read_csv(csv_file_path)
         
         speaker, mel_path, lf0_path = self.metadata[index]
@@ -89,5 +89,9 @@ class CPCDataset_sameSeq(Dataset):
 # #     print(mels)
 # #     print(mels_ids)
 # print(dataloader.__getitem__(0))
+current_path = os.getcwd()
+print("Current path:", current_path)
     
+csv_file_path = ".../Dataset/PromptTTS/Real_training.csv"
+df = pd.read_csv(csv_file_path)
 

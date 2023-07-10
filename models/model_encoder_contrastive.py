@@ -9,14 +9,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
-<<<<<<< Updated upstream
-from TextEncoder import BertEncoder
-from BERT_Config import MODELS
-=======
-from TextEncoder import BertEncoder
-from BERT_Config import MODELS
-from contrastive_loss import NTXent
->>>>>>> Stashed changes
+from models.TextEncoder import BertEncoder
+from models.BERT_Config import MODELS
+from models.contrastive_loss import NTXent
 
 
 def l2norm(X):

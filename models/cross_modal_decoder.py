@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from text.symbols import symbols
-import Constants as Constants
-from Modules import Mish, LinearNorm, ConvNorm, Conv1dGLU, \
+from models.text.symbols import symbols
+import models.Constants as Constants
+from models.Modules import Mish, LinearNorm, ConvNorm, Conv1dGLU, \
                     MultiHeadAttention, StyleAdaptiveLayerNorm, get_sinusoid_encoding_table
 # from models.VarianceAdaptor import VarianceAdaptor
 # from models.Loss import StyleSpeechLoss
