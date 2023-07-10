@@ -11,12 +11,21 @@ import json
 import resampy
 import pyworld as pw
 import pandas as pd
+import chardet
+import zipfile
 
 def extract_logmel(wav_path, sr=16000):
     # wav, fs = librosa.load(wav_path, sr=sr)
-    wav, fs = sf.read(wav_path)
-    wav, _ = librosa.effects.trim(wav, top_db=60) # To Trim any silence at the beginning or end of input audio
+    try:
+        wav, fs = sf.read(wav_path)
+        wav, _ = librosa.effects.trim(wav, top_db=60) # To Trim any silence at the beginning or end of input audio
     # ensure the audio as a sample rate of 16000, otherwise, resample it to be so
+    except:
+        print(wav_path)
+        return None
+    if len(wav) == 0:
+        return None 
+
     if fs != sr:
         wav = resampy.resample(wav, fs, sr, axis=0)
         fs = sr
@@ -52,6 +61,7 @@ def extract_logmel(wav_path, sr=16000):
     
     wav_name = os.path.basename(wav_path).split('.')[0]
     # print(wav_name, mel.shape, duration)
+    print(wav_name, mel, lf0, mel.shape[0])
     return wav_name, mel, lf0, mel.shape[0] # mel.shape[0]: an integer representing the length (in time frames) of the mel spectrogram.
 
 
@@ -79,12 +89,19 @@ data_root = 'Dataset/PromptTTS/train_wavs'
 save_root = 'data'
 os.makedirs(save_root, exist_ok=True)
 
-# get speaker names and caption info
-spk_caption_info_csv = 'Dataset/PromptTTS/Real_training.csv'
-f = pd.read_csv(spk_caption_info_csv)
+
+
+# Read the file using the detected encoding
+# Detect the encoding
+with open('Dataset/PromptTTS/Real_training.csv', 'rb') as f:
+    result = chardet.detect(f.read())
+
+# Print the detected encoding
+
+# Read the file using the detected encoding
+f = pd.read_csv('Dataset/PromptTTS/Real_training.csv', encoding=result['encoding'].lower())
 # gen2spk = {}
 all_spks = list(f['spk_id'].unique())
-
 random.shuffle(all_spks)
 train_spks = all_spks[:-40]
 test_spks = all_spks[-40:]
@@ -94,9 +111,10 @@ valid_wavs_names = []
 test_wavs_names = []
 
 # get the audio names for each speaker respectively for validation and training set    
-print('all_spks:', all_spks)
+# print('all_spks:', all_spks)
+
 for spk in train_spks:
-    spk_wavs = glob(f'{data_root}/{spk}/*.wav')
+    spk_wavs = glob('Dataset/train_wavs/*.wav')
     spk_wavs_names = [os.path.basename(p).split('.')[0] for p in spk_wavs]
     valid_names = random.sample(spk_wavs_names, int(len(spk_wavs_names)*0.05))
     train_names = [n for n in spk_wavs_names if n not in valid_names]
@@ -105,7 +123,7 @@ for spk in train_spks:
   
 # get the audio names for each speaker for testing set        
 for spk in test_spks:
-    spk_wavs = glob(f'{data_root}/{spk}/*.wav')
+    spk_wavs = glob('Dataset/train_wavs/*.wav') # 'Dataset/PromptTTS/train_wavs/*.wav
     spk_wavs_names = [os.path.basename(p).split('.')[0] for p in spk_wavs]
     test_wavs_names += spk_wavs_names
     
@@ -114,13 +132,15 @@ print(len(valid_wavs_names))
 print(len(test_wavs_names))
 # extract log-mel
 print('extract log-mel...')
-all_wavs = glob(f'{data_root}/*/*.wav')
+all_wavs = glob('Dataset/train_wavs/*.wav')
 results = Parallel(n_jobs=-1)(delayed(extract_logmel)(wav_path) for wav_path in tqdm(all_wavs))
 wn2mel = {}
 for r in results:
+    if r is None:
+        continue
     wav_name, mel, lf0, mel_len = r
-    # print(wav_name, mel.shape, duration)
-    wn2mel[wav_name] = [mel, lf0, mel_len] # map audio name to the mel-spectrogram representation of the audio
+    wn2mel[wav_name] = [mel, lf0, mel_len]
+ # map audio name to the mel-spectrogram representation of the audio
 
 # normalize log-mel
 print('normalize log-mel...')
@@ -130,12 +150,15 @@ for wav_name in train_wavs_names:
     mel, _, _ = wn2mel[wav_name]
     print(mel.shape)
     mels.append(mel)
+if mels:
+    mels = np.concatenate(mels, axis=0)
+    mean = np.mean(mels, axis=0)
+    std = np.std(mels, axis=0)
+    mel_stats = np.concatenate([mean.reshape(1,-1), std.reshape(1,-1)], axis= 0)
+    np.save(f'{save_root}/mel_stats.npy', mel_stats)
+else: 
+    print("No mels to concatenate. Make sure train_wavs_names is not empty.")
 
-mels = np.concatenate(mels, 0)
-mean = np.mean(mels, 0)
-std = np.std(mels, 0)
-mel_stats = np.concatenate([mean.reshape(1,-1), std.reshape(1,-1)], 0)
-np.save(f'{save_root}/mel_stats.npy', mel_stats)
 
 results = Parallel(n_jobs=-1)(delayed(normalize_logmel)(wav_name, wn2mel[wav_name][0], mean, std) for wav_name in tqdm(wn2mel.keys()))
 wn2mel_new = {}
