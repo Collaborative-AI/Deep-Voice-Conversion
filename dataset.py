@@ -105,7 +105,7 @@ csv_file_path = os.path.join(dataset_dir, 'Dataset/PromptTTS/Real_training.csv')
 with open(csv_file_path, 'rb') as df:
     result = chardet.detect(df.read())
 # Read the file using the detected encoding
-df = pd.read_csv('/Users/chaelin/Deep-Voice-Conversion/Dataset/PromptTTS/Real_training.csv', encoding=result['encoding'].lower())
+df = pd.read_csv('Deep-Voice-Conversion/Dataset/PromptTTS/Real_training.csv', encoding=result['encoding'].lower())
   
 # csv_file_path = 'Dataset/PromptTTS/Real_training.csv'
 # df = pd.read_csv(csv_file_path)
