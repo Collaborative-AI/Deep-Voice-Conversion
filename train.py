@@ -241,7 +241,7 @@ def eval_model(epoch, checkpoint_dir, device, valid_dataloader, encoder_content,
     to_train(all_models)
     
     
-@hydra.main(config_path="config/train.yaml")
+@hydra.main(config_path="config", config_name ="train")
 def train_model(cfg):
     cfg.checkpoint_dir = f'{cfg.checkpoint_dir}/useCSMI{cfg.use_CSMI}'
     
