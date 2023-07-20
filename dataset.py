@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 from hydra import utils
 import pandas as pd
+import chardet
 
 
 class CPCDataset_sameSeq(Dataset):
@@ -32,8 +33,15 @@ class CPCDataset_sameSeq(Dataset):
         return len(self.metadata)
 
     def __getitem__(self, index):
-        csv_file_path = ".../Dataset/PromptTTS/Real_training.csv"
-        df = pd.read_csv(csv_file_path)
+        dataset_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_file_path = os.path.join(dataset_dir, 'Dataset/PromptTTS/Real_training.csv')
+        with open(csv_file_path, 'rb') as df:
+            result = chardet.detect(df.read())
+# Read the file using the detected encoding
+        df = pd.read_csv('/Users/chaelin/Deep-Voice-Conversion/Dataset/PromptTTS/Real_training.csv', encoding=result['encoding'].lower())
+
+        # csv_file_path = ".../Dataset/PromptTTS/Real_training.csv"
+        # df = pd.read_csv(csv_file_path)
         
         speaker, mel_path, lf0_path = self.metadata[index]
 
@@ -91,7 +99,14 @@ class CPCDataset_sameSeq(Dataset):
 # print(dataloader.__getitem__(0))
 current_path = os.getcwd()
 print("Current path:", current_path)
-    
-csv_file_path = ".../Dataset/PromptTTS/Real_training.csv"
-df = pd.read_csv(csv_file_path)
+
+dataset_dir = os.path.dirname(os.path.abspath(__file__))
+csv_file_path = os.path.join(dataset_dir, 'Dataset/PromptTTS/Real_training.csv')
+with open(csv_file_path, 'rb') as df:
+    result = chardet.detect(df.read())
+# Read the file using the detected encoding
+df = pd.read_csv('/Users/chaelin/Deep-Voice-Conversion/Dataset/PromptTTS/Real_training.csv', encoding=result['encoding'].lower())
+  
+# csv_file_path = 'Dataset/PromptTTS/Real_training.csv'
+# df = pd.read_csv(csv_file_path)
 
