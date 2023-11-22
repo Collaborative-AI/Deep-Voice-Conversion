@@ -62,7 +62,7 @@ class Predictor(BasePredictor):
     def setup(self):
         """Load models"""
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint_path = "VQMIVC-pretrained models/checkpoints/useCSMITrue_useCPMITrue_usePSMITrue_useAmpTrue/VQMIVC-model.ckpt-500.pt"
+        checkpoint_path = "checkpoints/useCSMITrue_useCPMITrue_usePSMITrue_useAmpFalse/model.ckpt-500.pt"
         mel_stats = np.load("./mel_stats/stats.npy")
 
         encoder = Encoder(
@@ -75,9 +75,10 @@ class Predictor(BasePredictor):
         encoder_lf0.to(device)
         encoder_spk.to(device)
         decoder.to(device)
-
+        #print(checkpoint_path)
         checkpoint = torch.load(
             checkpoint_path, map_location=lambda storage, loc: storage
+            
         )
         encoder.load_state_dict(checkpoint["encoder"])
         encoder_spk.load_state_dict(checkpoint["encoder_spk"])
@@ -146,3 +147,15 @@ class Predictor(BasePredictor):
         subprocess.call(cmd)
 
         return out_path
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Voice conversion using VQMIVC.')
+    parser.add_argument('--input_source', type=str, required=True, help='test_wavs/p225_038.wav')
+    parser.add_argument('--input_reference', type=str, required=True, help='test_wavs/p334_047.wav')
+    
+    args = parser.parse_args()
+    
+    predictor = Predictor()
+    predictor.setup()
+    output_path = predictor.predict(args.input_source, args.input_reference)
+    print(f"Output file saved at: {output_path}")

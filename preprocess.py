@@ -16,16 +16,15 @@ import pyworld as pw
 def extract_logmel(wav_path, sr=16000):
     # wav, fs = librosa.load(wav_path, sr=sr)
     wav, fs = sf.read(wav_path)
-    wav, _ = librosa.effects.trim(wav, top_db=60) # To Trim any silence at the beginning or end of input audio
-    # ensure the audio as a sample rate of 16000, otherwise, resample it to be so
+    wav, _ = librosa.effects.trim(wav, top_db=60)
     if fs != sr:
         wav = resampy.resample(wav, fs, sr, axis=0)
         fs = sr
     # duration = len(wav)/fs
-    assert fs == 16000 # Assertion Error Thrown if sample rate of the audio is not 16000
+    assert fs == 16000
     peak = np.abs(wav).max()
     if peak > 1.0:
-        wav /= peak # Calculate the peak amplitude of the audio signal and normalize it if it exceeds 1.
+        wav /= peak
     mel = logmelspectrogram(
                 x=wav,
                 fs=fs,
@@ -39,21 +38,17 @@ def extract_logmel(wav_path, sr=16000):
             )
     
     tlen = mel.shape[0]
-    frame_period = 160/fs*1000 # calculate the time period between pitch calculations
-    
-    # get fundamental frequency 
+    frame_period = 160/fs*1000
     f0, timeaxis = pw.dio(wav.astype('float64'), fs, frame_period=frame_period)
-    f0 = pw.stonemask(wav.astype('float64'), f0, timeaxis, fs) 
+    f0 = pw.stonemask(wav.astype('float64'), f0, timeaxis, fs)
     f0 = f0[:tlen].reshape(-1).astype('float32')
     nonzeros_indices = np.nonzero(f0)
     lf0 = f0.copy()
-    
-    # also log the frequency contour since the wav is log-spectrogrammed
     lf0[nonzeros_indices] = np.log(f0[nonzeros_indices]) # for f0(Hz), lf0 > 0 when f0 != 0
     
     wav_name = os.path.basename(wav_path).split('.')[0]
     # print(wav_name, mel.shape, duration)
-    return wav_name, mel, lf0, mel.shape[0] # mel.shape[0]: an integer representing the length (in time frames) of the mel spectrogram.
+    return wav_name, mel, lf0, mel.shape[0]
 
 
 def normalize_logmel(wav_name, mel, mean, std):
@@ -76,12 +71,11 @@ def save_logmel(save_root, wav_name, melinfo, mode):
     return mel_len, mel_save_path, lf0_save_path
 
 # def get_wavs_names(spks, data_root)
-data_root = 'Dataset/VCTK-Corpus/wav48'
-save_root = 'data'
+data_root = 'D:\Duke\pytorch\Dataset\VCTK-Corpus\wav48_silence_trimmed'
+save_root = 'D:\Duke\pytorch/data'
 os.makedirs(save_root, exist_ok=True)
 
-# get speaker names and gender2speaker info
-spk_info_txt = 'Dataset/VCTK-Corpus/speaker-info.txt'
+spk_info_txt = 'D:\Duke\pytorch\Dataset\VCTK-Corpus\speaker-info.txt'
 f = open(spk_info_txt, 'r')
 gen2spk = {}
 all_spks = []
@@ -106,22 +100,20 @@ test_spks = all_spks[-20:]
 train_wavs_names = []
 valid_wavs_names = []
 test_wavs_names = []
-
-# get the audio names for each speaker respectively for validation and training set    
+    
 print('all_spks:', all_spks)
 for spk in train_spks:
-    spk = "p" + spk
-    spk_wavs = glob(f'{data_root}/{spk}/*.wav')
+    spk_wavs = glob(f'{data_root}/{spk}/*mic1.flac')
+    print('len(spk_wavs):', len(spk_wavs))
     spk_wavs_names = [os.path.basename(p).split('.')[0] for p in spk_wavs]
     valid_names = random.sample(spk_wavs_names, int(len(spk_wavs_names)*0.1))
     train_names = [n for n in spk_wavs_names if n not in valid_names]
     train_wavs_names += train_names
     valid_wavs_names += valid_names
-  
-# get the audio names for each speaker for testing set        
+    
 for spk in test_spks:
-    spk = "p" + spk
-    spk_wavs = glob(f'{data_root}/{spk}/*.wav')
+    spk_wavs = glob(f'{data_root}/{spk}/*mic1.flac')
+    print('len(spk_wavs):', len(spk_wavs))
     spk_wavs_names = [os.path.basename(p).split('.')[0] for p in spk_wavs]
     test_wavs_names += spk_wavs_names
     
@@ -130,13 +122,13 @@ print(len(valid_wavs_names))
 print(len(test_wavs_names))
 # extract log-mel
 print('extract log-mel...')
-all_wavs = glob(f'{data_root}/*/*.wav')
+all_wavs = glob(f'{data_root}/*/*mic1.flac')
 results = Parallel(n_jobs=-1)(delayed(extract_logmel)(wav_path) for wav_path in tqdm(all_wavs))
 wn2mel = {}
 for r in results:
     wav_name, mel, lf0, mel_len = r
     # print(wav_name, mel.shape, duration)
-    wn2mel[wav_name] = [mel, lf0, mel_len] # map audio name to the mel-spectrogram representation of the audio
+    wn2mel[wav_name] = [mel, lf0, mel_len]
 
 # normalize log-mel
 print('normalize log-mel...')
@@ -144,7 +136,6 @@ mels = []
 spk2lf0 = {}
 for wav_name in train_wavs_names:
     mel, _, _ = wn2mel[wav_name]
-    print(mel.shape)
     mels.append(mel)
 
 mels = np.concatenate(mels, 0)
