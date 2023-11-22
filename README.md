@@ -1,4 +1,4 @@
-# vqmivc
+# vqmivc (this is from https://github.com/Deep-Spark/DeepSparkHub/blob/98b9a53b66378f66dd02f5681e37ee38fa146cb7/speech/speech_synthesis/vqmivc/pytorch/README.md)
 
 ## Model description
 
