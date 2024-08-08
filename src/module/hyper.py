@@ -5,6 +5,7 @@ def process_control():
     cfg['data_name'] = cfg['control']['data_name']
     cfg['model_name'] = cfg['control']['model_name']
 
+    # cfg['batch_size'] = 1
     cfg['batch_size'] = 250
     cfg['step_period'] = 1
     cfg['num_steps'] = 80000
@@ -12,11 +13,13 @@ def process_control():
     # cfg['num_epochs'] = 400
     cfg['collate_mode'] = 'dict'
 
+    cfg['segment_length'] = cfg['sample_rate'] * cfg['segment_seconds']
+    
     cfg['model'] = {}
     cfg['model']['model_name'] = cfg['model_name']
     data_shape = {'MNIST': [1, 28, 28], 'FashionMNIST': [1, 28, 28], 'SVHN': [3, 32, 32], 'CIFAR10': [3, 32, 32],
-                  'CIFAR100': [3, 32, 32], 'VCTK': [1, cfg['wave_len']]}
-    target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10, 'CIFAR10': 10, 'CIFAR100': 100, 'VCTK': cfg['wave_len']}
+                  'CIFAR100': [3, 32, 32], 'VCTK': [1, cfg['segment_length']]}
+    target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10, 'CIFAR10': 10, 'CIFAR100': 100, 'VCTK': cfg['segment_length']}
     cfg['model']['data_shape'] = data_shape[cfg['data_name']]
     cfg['model']['target_size'] = target_size[cfg['data_name']]
     cfg['model']['linear'] = {}

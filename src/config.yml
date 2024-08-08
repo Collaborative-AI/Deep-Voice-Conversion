@@ -10,6 +10,9 @@ init_seed: 0
 num_experiments: 1
 log_interval: 0.25
 device: cpu
+sample_rate: 8000
+segment_seconds: 2
+audio_pad_id: 2.0
 # device: cuda
 resume_mode: 0
 profile: False
