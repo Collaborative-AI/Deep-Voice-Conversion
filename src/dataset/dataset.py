@@ -56,12 +56,9 @@ def make_dataset(data_name, verbose=True):
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
     elif data_name in ['VCTK']:
-        dataset_['train'] = eval('dataset.{}(root=root, split="train", '
-                                 'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name)) 
-        dataset_['test'] = eval('dataset.{}(root=root, split="test", '
-                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
-        dataset_['val'] = eval('dataset.{}(root=root, split="test", '
-                                'transform=dataset.Compose([transforms.ToTensor()]))'.format(data_name))
+        dataset_['train'] = eval('dataset.{}(root=root, split="train")'.format(data_name)) 
+        dataset_['test'] = eval('dataset.{}(root=root, split="test")'.format(data_name))
+        dataset_['val'] = eval('dataset.{}(root=root, split="test")'.format(data_name))
     else: 
         raise ValueError('Not valid dataset name')
     if verbose and data_name not in ['VCTK']:
@@ -85,14 +82,7 @@ def input_collate(input):
     for k, v in first.items():
         if v is not None and not isinstance(v, str):
             if isinstance(v, torch.Tensor):
-                try:
-                    batch[k] = torch.stack([f[k] for f in input])
-                except RuntimeError:
-                    if k in ['text_tensor']:
-                        tensor_list = [f[k] for f in input]
-                        batch[k] = pad_sequence(tensor_list, batch_first=True, padding_value=-1)
-                    else:
-                        batch[k] = torch.stack([f[k] for f in input]) # return same error if not text tensor
+                batch[k] = torch.stack([f[k] for f in input])
             elif isinstance(v, np.ndarray):
                 batch[k] = torch.tensor(np.stack([f[k] for f in input]))
             else:
