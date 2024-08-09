@@ -2,28 +2,21 @@
 import os
 import requests
 import zipfile
-import shutil
 import os
 from tqdm import tqdm
 import librosa
 import soundfile as sf
 import pandas as pd
-import pickle
 from sklearn.model_selection import train_test_split
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio.transforms as T
-# import codecs
 import numpy as np
 import os
 import torch
-from PIL import Image
 from torch.utils.data import Dataset
 from module import check_exists, makedir_exist_ok, save, load
-from .utils import download_url, extract_file, make_classes_counts
 from config import cfg
 
 class VCTK(Dataset):
@@ -77,8 +70,8 @@ class VCTK(Dataset):
             ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['segment_length']]
             length = cfg['segment_length']
         else:
-            audio = torch.nn.functional.pad(og_audio, (0, cfg['segment_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            ref_audio = torch.nn.functional.pad(og_audio, (0, cfg['segment_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            audio = F.pad(og_audio, (0, cfg['segment_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            ref_audio = F.pad(og_audio, (0, cfg['segment_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
             length = og_audio.shape[-1]
         
         # get refrence information styletts way --- IGNORE THIS SECTION

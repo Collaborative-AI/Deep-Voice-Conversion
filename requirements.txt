@@ -11,3 +11,7 @@ tqdm==4.64.1
 librosa
 soundfile
 torchaudio==2.0.2
+requests
+scikit-learn
+transformers
+sentencepiece
