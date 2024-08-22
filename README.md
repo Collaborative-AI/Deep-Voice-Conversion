@@ -31,6 +31,36 @@ See `requirements.txt`
     ```ruby
     python process.py
     ```
+   
+## Examples for VCTKTime
+ - Generate run script
+    ```ruby
+    bash make.sh
+    ```
+ - Generate run script
+    ```ruby
+    python make.py --mode base
+    ```
+ - (Optional: if you already have VCTK downloaded) Skip download step
+    ```ruby
+    mkdir data/VCTKTime
+    mkdir data/VCTKTime/raw
+    ```
+
+   add 'wav48_silence_trimmed' and 'speaker-info.txt' into the 'data/raw' directory
+
+ - Train with VCTK and linear model
+    ```ruby
+    python train_model.py --control_name MNIST_linear
+    ```
+ - Test with CIFAR10 and resnet18 model
+    ```ruby
+    python test_model.py --control_name CIFAR10_resnet18
+    ```
+ - Process exp results
+    ```ruby
+    python process.py
+    ```
 
 ## Results
 - Learning curves of MNIST
