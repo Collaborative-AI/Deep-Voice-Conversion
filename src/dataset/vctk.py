@@ -19,8 +19,8 @@ from torch.utils.data import Dataset
 from module import check_exists, makedir_exist_ok, save, load
 from config import cfg
 
-class VCTK(Dataset):
-    data_name = 'VCTK'
+class VCTKTime(Dataset):
+    data_name = 'VCTKTime'
 
     def __init__(self, root, split, transform=None):
         

@@ -18,8 +18,8 @@ def process_control():
     cfg['model'] = {}
     cfg['model']['model_name'] = cfg['model_name']
     data_shape = {'MNIST': [1, 28, 28], 'FashionMNIST': [1, 28, 28], 'SVHN': [3, 32, 32], 'CIFAR10': [3, 32, 32],
-                  'CIFAR100': [3, 32, 32], 'VCTK': [1, cfg['segment_length']]}
-    target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10, 'CIFAR10': 10, 'CIFAR100': 100, 'VCTK': cfg['segment_length']}
+                  'CIFAR100': [3, 32, 32], 'VCTKTime': [1, cfg['segment_length']]}
+    target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10, 'CIFAR10': 10, 'CIFAR100': 100, 'VCTKTime': cfg['segment_length']}
     cfg['model']['data_shape'] = data_shape[cfg['data_name']]
     cfg['model']['target_size'] = target_size[cfg['data_name']]
     cfg['model']['linear'] = {}

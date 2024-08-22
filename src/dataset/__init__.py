@@ -3,4 +3,4 @@ from .utils import *
 from .mnist import MNIST, FashionMNIST
 from .cifar import CIFAR10, CIFAR100
 from .svhn import SVHN
-from .vctk import VCTK
+from .vctk import VCTKTime
