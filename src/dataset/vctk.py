@@ -72,7 +72,6 @@ class VCTK(Dataset):
         save(speaker_to_idx, os.path.join(self.processed_folder, 'meta'+self.sr_int))
         return
         
-
     def download(self):
         makedir_exist_ok(self.raw_folder)
         # Define the URL and the target paths
@@ -87,9 +86,21 @@ class VCTK(Dataset):
         # Download the dataset
         print(f"Downloading VCTK dataset from {url}. This may take a long time...")
         response = requests.get(url, stream=True)
-        with open(download_path, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=8192):
+
+        total_size_in_bytes = int(response.headers.get('content-length', 0))
+        block_size = 2**15  # The chunk size for reading the response
+
+
+        with open(download_path, 'wb') as file, tqdm(
+            desc="Downloading",
+            total=total_size_in_bytes,
+            unit='iB',  # Unit is in bytes
+            unit_scale=True,
+            unit_divisor=1024,  # Display in KB, MB, etc.
+        ) as bar:
+            for chunk in response.iter_content(chunk_size=block_size):
                 file.write(chunk)
+                bar.update(len(chunk))
         print("Download complete.")
 
         # Unzip the file
