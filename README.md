@@ -51,7 +51,7 @@ See `requirements.txt`
 
  - Train with VCTK and linear model
     ```ruby
-    python train_model.py --control_name MNIST_linear
+    python train_model.py --control_name VCTK_linear
     ```
  - Test with CIFAR10 and resnet18 model
     ```ruby
