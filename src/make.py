@@ -45,7 +45,7 @@ def main():
     filename = '{}_{}'.format(run, mode)
     if mode == 'base':
         script_name = [['{}_model.py'.format(run)]]
-        data_name = ['MNIST', 'CIFAR10', 'VCTKTime'] # ADD VCTK
+        data_name = ['MNIST', 'CIFAR10', 'VCTKTime', 'VCTKMel'] # ADD VCTK
         model_name = ['linear', 'mlp', 'cnn', 'resnet18'] # ADD NEW MODELS HERE
         control_name = [[data_name, model_name]]
         controls = make_controls(script_name, init_seeds, num_experiments, resume_mode, control_name)

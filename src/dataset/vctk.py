@@ -19,14 +19,11 @@ from torch.utils.data import Dataset
 from module import check_exists, makedir_exist_ok, save, load
 from config import cfg
 
-class VCTKTime(Dataset):
-    data_name = 'VCTKTime'
-
+class VCTK(Dataset):
     def __init__(self, root, split, transform=None):
-        
         assert split in ['train', 'test', 'val']
         
-        self.root = os.path.expanduser(root)
+        self.root = os.path.expanduser('data/VCTK')
         self.file = 'https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip'
         self.split = split
         self.transform = transform
@@ -34,7 +31,7 @@ class VCTKTime(Dataset):
         self.sr_int = str(int(self.sample_rate // 1e3))
         
         ### CREATE TOKENIZER
-        if not check_exists(self.processed_folder):
+        if not check_exists(self.processed_folder) or not check_exists(os.path.join(self.processed_folder, self.split + self.sr_int)):
             print("Processing...")
             self.process()
         self.data = pd.read_pickle(os.path.join(self.processed_folder, self.split + self.sr_int))
@@ -42,63 +39,7 @@ class VCTKTime(Dataset):
         
         
         self.speaker_to_idx = load(os.path.join(self.processed_folder, 'meta' + self.sr_int))
-            
-    def __getitem__(self, idx):
-        """
-        What i want the code to do is as follows:
         
-        - select target information
-        - clip target audio to MAX_WAVE_LEN with random start position
-        - clip refrence audio to MAX_WAVE_LEN with another random start position
-        """
-        
-        # get target information
-        row = self.data.iloc[idx]
-        
-        og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
-        og_audio = torch.from_numpy(og_audio)
-        
-        speaker_id = self.speaker_to_idx[row['speaker_id']]
-        
-        # get refrence information b-vae way --- ADHERE TO THESE COMMENTS
-        ## get max wave len random section of audio 
-        ## get another max wav len random section of audio -- this is ref audio
-        if len(og_audio) > cfg['segment_length']:
-            start_idx = np.random.randint(0, len(og_audio) - cfg['segment_length'])
-            audio = og_audio[start_idx:start_idx + cfg['segment_length']]
-            ref_start_idx = np.random.randint(0, len(og_audio) - cfg['segment_length'])
-            ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['segment_length']]
-            length = cfg['segment_length']
-        else:
-            audio = F.pad(og_audio, (0, cfg['segment_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            ref_audio = F.pad(og_audio, (0, cfg['segment_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            length = og_audio.shape[-1]
-        
-        # get refrence information styletts way --- IGNORE THIS SECTION
-        # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
-        
-        # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
-        # ref_audio = torch.from_numpy(ref_audio)
-        
-        # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
-        
-        
-        
-        
-        sample = {
-            'data': audio,
-            'target': audio,
-            'length': length,
-            'speaker_id': torch.tensor(speaker_id, dtype=torch.long),  # Numeric speaker ID
-            'ref_audio': ref_audio,
-            # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
-        }
-        
-        if self.transform is not None:
-            sample = self.transform(sample)
-        
-        return sample
-
     def __len__(self):
         return len(self.data)
 
@@ -289,3 +230,152 @@ class VCTKTime(Dataset):
         test_df = df[df['speaker_id'].isin(test_speakers)]
         
         return train_df, val_df, test_df
+
+class VCTKMel(VCTK):
+    data_name = 'VCTKMel'
+    
+    def __init__(self, root, split, transform=None):
+        super().__init__(root, split, transform)
+        
+    def __getitem__(self, idx):
+        """
+        What i want the code to do is as follows:
+        
+        - select target information
+        - clip target audio to MAX_WAVE_LEN with random start position
+        - clip refrence audio to MAX_WAVE_LEN with another random start position
+        """
+        
+        # get target information
+        row = self.data.iloc[idx]
+        
+        og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
+        og_audio = torch.from_numpy(og_audio)
+        
+        speaker_id = self.speaker_to_idx[row['speaker_id']]
+        
+        # get refrence information b-vae way --- ADHERE TO THESE COMMENTS
+        ## get max wave len random section of audio 
+        ## get another max wav len random section of audio -- this is ref audio
+        if len(og_audio) > cfg['wav_length']:
+            start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+            audio = og_audio[start_idx:start_idx + cfg['wav_length']]
+            ref_start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+            ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['wav_length']]
+            length = cfg['wav_length']
+        else:
+            audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            length = og_audio.shape[-1]
+        
+        # get refrence information styletts way --- IGNORE THIS SECTION
+        # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
+        
+        # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
+        # ref_audio = torch.from_numpy(ref_audio)
+        
+        # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
+        
+        
+        mel_audio = librosa.feature.melspectrogram(y=audio.numpy(), 
+                                                   sr=cfg['sample_rate'], 
+                                                   n_fft=cfg['filter_length'], 
+                                                   hop_length=cfg["hop_length"], 
+                                                   win_length=cfg["win_length"], 
+                                                   fmin=cfg['mel_fmin'], 
+                                                   fmax=cfg['mel_fmax'], 
+                                                   n_mels=cfg["n_mel_channels"], 
+                                                   window=torch.hann_window)
+        
+        ref_mel_audio = librosa.feature.melspectrogram(y=ref_audio.numpy(), 
+                                                       sr=cfg['sample_rate'], 
+                                                       n_fft=cfg['filter_length'], 
+                                                       hop_length=cfg["hop_length"], 
+                                                       win_length=cfg["win_length"], 
+                                                       fmin=cfg['mel_fmin'], 
+                                                       fmax=cfg['mel_fmax'], 
+                                                       n_mels=cfg["n_mel_channels"], 
+                                                       window=torch.hann_window)
+        
+        mel_audio = torch.from_numpy(mel_audio) # REVIEW HERE: switches between torch and np may be inefficient
+        ref_mel_audio = torch.from_numpy(ref_mel_audio)
+        mel_audio = mel_audio.unsqueeze(0)
+        
+        sample = {
+            'data': mel_audio,
+            'wav': audio,
+            'target': torch.flatten(mel_audio),
+            # 'length': length,
+            'speaker_id': torch.tensor(speaker_id, dtype=torch.long),  # Numeric speaker ID
+            'ref_audio': ref_mel_audio,
+            # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
+        }
+        
+        if self.transform is not None:
+            sample = self.transform(sample)
+        
+        return sample
+
+class VCTKTime(VCTK):
+    data_name = 'VCTKTime'
+
+    def __init__(self, root, split, transform=None):
+        super().__init__(root, split, transform)
+            
+    def __getitem__(self, idx):
+        """
+        What i want the code to do is as follows:
+        
+        - select target information
+        - clip target audio to MAX_WAVE_LEN with random start position
+        - clip refrence audio to MAX_WAVE_LEN with another random start position
+        """
+        
+        # get target information
+        row = self.data.iloc[idx]
+        
+        og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
+        og_audio = torch.from_numpy(og_audio)
+        
+        speaker_id = self.speaker_to_idx[row['speaker_id']]
+        
+        # get refrence information b-vae way --- ADHERE TO THESE COMMENTS
+        ## get max wave len random section of audio 
+        ## get another max wav len random section of audio -- this is ref audio
+        if len(og_audio) > cfg['wav_length']:
+            start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+            audio = og_audio[start_idx:start_idx + cfg['wav_length']]
+            ref_start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+            ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['wav_length']]
+            length = cfg['wav_length']
+        else:
+            audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            length = og_audio.shape[-1]
+        
+        # get refrence information styletts way --- IGNORE THIS SECTION
+        # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
+        
+        # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
+        # ref_audio = torch.from_numpy(ref_audio)
+        
+        # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
+        
+        
+        
+        
+        sample = {
+            'data': audio,
+            'target': audio,
+            'length': length,
+            'speaker_id': torch.tensor(speaker_id, dtype=torch.long),  # Numeric speaker ID
+            'ref_audio': ref_audio,
+            # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
+        }
+        
+        if self.transform is not None:
+            sample = self.transform(sample)
+        
+        return sample
+
+    

@@ -13,14 +13,14 @@ def make_metric(split, **kwargs):
         best_metric_name = 'Accuracy'
         for k in metric_name:
             metric_name[k].extend(['Loss', 'Accuracy'])
-    if data_name in ['VCTKTime']:
+    elif data_name in ['VCTKTime', 'VCTKMel']:
         best = float('inf')
         best_direction = 'down'
         best_metric_name = 'MSE'
         for k in metric_name:
             metric_name[k].extend(['Loss', 'MSE'])
     else:
-        raise ValueError('Not valid data name')
+        raise ValueError('Not valid data name. Got "{}"'.format(data_name))
     metric = Metric(metric_name, best, best_direction, best_metric_name)
     return metric
 

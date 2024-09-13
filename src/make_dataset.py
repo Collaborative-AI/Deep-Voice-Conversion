@@ -8,7 +8,7 @@ from module import save, Stats, makedir_exist_ok, process_control
 if __name__ == "__main__":
     stats_path = os.path.join('output', 'stats')
     dim = 1
-    data_names = ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100', 'VCTKTime'] # ADD VCTK
+    data_names = ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100', 'VCTKTime', 'VCTKMel'] # ADD VCTK
     cfg['seed'] = 0
     cfg['tag'] = 'make_dataset'
     process_control()

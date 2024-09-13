@@ -10,9 +10,15 @@ init_seed: 0
 num_experiments: 1
 log_interval: 0.25
 device: cpu
-sample_rate: 8000
+sample_rate: 16000
 segment_seconds: 2
-audio_pad_id: 2.0
+filter_length: 1280
+hop_length: 320
+win_length: 1280
+mel_fmin: 0
+mel_fmax: 8000
+n_mel_channels: 80
+audio_pad_id: 0
 # device: cuda
 resume_mode: 0
 profile: False
