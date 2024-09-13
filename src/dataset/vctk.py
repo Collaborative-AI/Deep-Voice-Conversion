@@ -1,45 +1,39 @@
-### IMPORTS ###
-import os
 import requests
 import zipfile
-import os
-from tqdm import tqdm
 import librosa
 import soundfile as sf
 import pandas as pd
-from sklearn.model_selection import train_test_split
-import numpy as np
-import torch
-from torch.utils.data import Dataset
-import torch.nn.functional as F
 import numpy as np
 import os
 import torch
+import torch.nn.functional as F
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 from module import check_exists, makedir_exist_ok, save, load
 from config import cfg
 
+
 class VCTK(Dataset):
     def __init__(self, root, split, transform=None):
         assert split in ['train', 'test', 'val']
-        
-        self.root = os.path.expanduser('data/VCTK')
+
+        self.root = root
         self.file = 'https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip'
         self.split = split
         self.transform = transform
         self.sample_rate = cfg['sample_rate']
         self.sr_int = str(int(self.sample_rate // 1e3))
-        
-        ### CREATE TOKENIZER
-        if not check_exists(self.processed_folder) or not check_exists(os.path.join(self.processed_folder, self.split + self.sr_int)):
+
+        if not check_exists(self.processed_folder) or not check_exists(
+                os.path.join(self.processed_folder, self.split + self.sr_int)):
             print("Processing...")
             self.process()
         self.data = pd.read_pickle(os.path.join(self.processed_folder, self.split + self.sr_int))
         self.other = {}
-        
-        
+
         self.speaker_to_idx = load(os.path.join(self.processed_folder, 'meta' + self.sr_int))
-        
+
     def __len__(self):
         return len(self.data)
 
@@ -56,22 +50,21 @@ class VCTK(Dataset):
             self.download()
         if not check_exists(os.path.join(self.raw_folder, 'wav' + self.sr_int)):
             self.downsample()
-        
+
         os.makedirs(self.processed_folder, exist_ok=True)
-        
+
         train_set, val_set, test_set = self.make_data()
-        train_set.to_pickle(os.path.join(self.processed_folder, 'train'+self.sr_int))
-        val_set.to_pickle(os.path.join(self.processed_folder, 'val'+self.sr_int))
-        test_set.to_pickle(os.path.join(self.processed_folder, 'test'+self.sr_int))
-        
-        unique_speakers = (train_set['speaker_id'].unique().tolist() + 
-                            val_set['speaker_id'].unique().tolist() + 
-                            test_set['speaker_id'].unique().tolist())
+        train_set.to_pickle(os.path.join(self.processed_folder, 'train' + self.sr_int))
+        val_set.to_pickle(os.path.join(self.processed_folder, 'val' + self.sr_int))
+        test_set.to_pickle(os.path.join(self.processed_folder, 'test' + self.sr_int))
+
+        unique_speakers = (train_set['speaker_id'].unique().tolist() +
+                           val_set['speaker_id'].unique().tolist() +
+                           test_set['speaker_id'].unique().tolist())
 
         speaker_to_idx = {speaker: idx for idx, speaker in enumerate(unique_speakers)}
-        save(speaker_to_idx, os.path.join(self.processed_folder, 'meta'+self.sr_int))
+        save(speaker_to_idx, os.path.join(self.processed_folder, 'meta' + self.sr_int))
         return
-        
 
     def download(self):
         makedir_exist_ok(self.raw_folder)
@@ -115,12 +108,12 @@ class VCTK(Dataset):
         fmt_str = 'Dataset {}\nSize: {}\nRoot: {}\nSplit: {}\nTransforms: {}'.format(
             self.__class__.__name__, self.__len__(), self.root, self.split, self.transform.__repr__())
         return fmt_str
-        
+
     def downsample(self):
         # Define paths and target sample rate
         input_dir = os.path.join(self.raw_folder, 'wav48_silence_trimmed')
-        output_dir = os.path.join(self.raw_folder, 'wav'+self.sr_int)
-        
+        output_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
+
         # Ensure the output directory exists
         os.makedirs(output_dir, exist_ok=True)
 
@@ -176,12 +169,12 @@ class VCTK(Dataset):
                     "comment": comment,
                 }
         return speaker_info
-    
+
     def make_data(self):
         # Define paths
-        wav_dir = os.path.join(self.raw_folder, 'wav'+self.sr_int)
+        wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
         speaker_info = self.read_speaker_info()
-        
+
         dataset = []
 
         files_to_process = []
@@ -189,72 +182,73 @@ class VCTK(Dataset):
             for file in files:
                 if file.endswith(".wav"):
                     files_to_process.append((root, file))
-        
 
         for root, file in tqdm(files_to_process, desc="Creating dataset", unit="file"):
             file_path = os.path.join(root, file)
             file_name = os.path.basename(file)
             speaker_id = file_name.split("_")[0]
-            
+
             speaker_meta = speaker_info.get(speaker_id, {})
             entry = {
                 "speaker_id": speaker_id,
                 "path": file_path
             }
             dataset.append(entry)
-            
+
         df = pd.DataFrame(dataset)
-        train_df, val_df, test_df = self.split_dataset(df)        
-        
+        train_df, val_df, test_df = self.split_dataset(df)
+
         return train_df, val_df, test_df
-    
+
     def split_dataset(self, df, train_size=0.7, val_size=0.15, test_size=0.15, random_state=42):
         # Ensure the split proportions sum to 1
         assert train_size + val_size + test_size == 1.0, "Train, validation, and test sizes must sum to 1.0"
-        
+
         # Get unique speakers
         speakers = df['speaker_id'].unique()
-        
+
         # Split speakers into train and temp (val + test)
         train_speakers, temp_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
-        
+
         # Calculate the proportion for validation in the temp split
         val_proportion = val_size / (val_size + test_size)
-        
+
         # Split temp_speakers into validation and test sets
-        val_speakers, test_speakers = train_test_split(temp_speakers, train_size=val_proportion, random_state=random_state)
-        
+        val_speakers, test_speakers = train_test_split(temp_speakers, train_size=val_proportion,
+                                                       random_state=random_state)
+
         # Assign entries to the respective sets
         train_df = df[df['speaker_id'].isin(train_speakers)]
         val_df = df[df['speaker_id'].isin(val_speakers)]
         test_df = df[df['speaker_id'].isin(test_speakers)]
-        
+
         return train_df, val_df, test_df
+
 
 class VCTKMel(VCTK):
     data_name = 'VCTKMel'
-    
+
     def __init__(self, root, split, transform=None):
         super().__init__(root, split, transform)
-        
+
     def __getitem__(self, idx):
         """
         What i want the code to do is as follows:
         
         - select target information
         - clip target audio to MAX_WAVE_LEN with random start position
-        - clip refrence audio to MAX_WAVE_LEN with another random start position
+        - clip reference audio to MAX_WAVE_LEN with another random start position
         """
-        
+
         # get target information
         row = self.data.iloc[idx]
-        
+
         og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
         og_audio = torch.from_numpy(og_audio)
-        
+
         speaker_id = self.speaker_to_idx[row['speaker_id']]
-        
-        # get refrence information b-vae way --- ADHERE TO THESE COMMENTS
+
+        # get reference information b-vae way --- ADHERE TO THESE COMMENTS
         ## get max wave len random section of audio 
         ## get another max wav len random section of audio -- this is ref audio
         if len(og_audio) > cfg['wav_length']:
@@ -267,40 +261,39 @@ class VCTKMel(VCTK):
             audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
             ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
             length = og_audio.shape[-1]
-        
-        # get refrence information styletts way --- IGNORE THIS SECTION
+
+        # get reference information styletts way --- IGNORE THIS SECTION
         # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
-        
+
         # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
         # ref_audio = torch.from_numpy(ref_audio)
-        
+
         # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
-        
-        
-        mel_audio = librosa.feature.melspectrogram(y=audio.numpy(), 
-                                                   sr=cfg['sample_rate'], 
-                                                   n_fft=cfg['filter_length'], 
-                                                   hop_length=cfg["hop_length"], 
-                                                   win_length=cfg["win_length"], 
-                                                   fmin=cfg['mel_fmin'], 
-                                                   fmax=cfg['mel_fmax'], 
-                                                   n_mels=cfg["n_mel_channels"], 
+
+        mel_audio = librosa.feature.melspectrogram(y=audio.numpy(),
+                                                   sr=cfg['sample_rate'],
+                                                   n_fft=cfg['filter_length'],
+                                                   hop_length=cfg["hop_length"],
+                                                   win_length=cfg["win_length"],
+                                                   fmin=cfg['mel_fmin'],
+                                                   fmax=cfg['mel_fmax'],
+                                                   n_mels=cfg["n_mel_channels"],
                                                    window=torch.hann_window)
-        
-        ref_mel_audio = librosa.feature.melspectrogram(y=ref_audio.numpy(), 
-                                                       sr=cfg['sample_rate'], 
-                                                       n_fft=cfg['filter_length'], 
-                                                       hop_length=cfg["hop_length"], 
-                                                       win_length=cfg["win_length"], 
-                                                       fmin=cfg['mel_fmin'], 
-                                                       fmax=cfg['mel_fmax'], 
-                                                       n_mels=cfg["n_mel_channels"], 
+
+        ref_mel_audio = librosa.feature.melspectrogram(y=ref_audio.numpy(),
+                                                       sr=cfg['sample_rate'],
+                                                       n_fft=cfg['filter_length'],
+                                                       hop_length=cfg["hop_length"],
+                                                       win_length=cfg["win_length"],
+                                                       fmin=cfg['mel_fmin'],
+                                                       fmax=cfg['mel_fmax'],
+                                                       n_mels=cfg["n_mel_channels"],
                                                        window=torch.hann_window)
-        
-        mel_audio = torch.from_numpy(mel_audio) # REVIEW HERE: switches between torch and np may be inefficient
+
+        mel_audio = torch.from_numpy(mel_audio)  # REVIEW HERE: switches between torch and np may be inefficient
         ref_mel_audio = torch.from_numpy(ref_mel_audio)
         mel_audio = mel_audio.unsqueeze(0)
-        
+
         sample = {
             'data': mel_audio,
             'wav': audio,
@@ -310,18 +303,19 @@ class VCTKMel(VCTK):
             'ref_audio': ref_mel_audio,
             # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
         }
-        
+
         if self.transform is not None:
             sample = self.transform(sample)
-        
+
         return sample
+
 
 class VCTKTime(VCTK):
     data_name = 'VCTKTime'
 
     def __init__(self, root, split, transform=None):
         super().__init__(root, split, transform)
-            
+
     def __getitem__(self, idx):
         """
         What i want the code to do is as follows:
@@ -330,16 +324,16 @@ class VCTKTime(VCTK):
         - clip target audio to MAX_WAVE_LEN with random start position
         - clip refrence audio to MAX_WAVE_LEN with another random start position
         """
-        
+
         # get target information
         row = self.data.iloc[idx]
-        
+
         og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
         og_audio = torch.from_numpy(og_audio)
-        
+
         speaker_id = self.speaker_to_idx[row['speaker_id']]
-        
-        # get refrence information b-vae way --- ADHERE TO THESE COMMENTS
+
+        # get reference information b-vae way --- ADHERE TO THESE COMMENTS
         ## get max wave len random section of audio 
         ## get another max wav len random section of audio -- this is ref audio
         if len(og_audio) > cfg['wav_length']:
@@ -352,18 +346,15 @@ class VCTKTime(VCTK):
             audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
             ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
             length = og_audio.shape[-1]
-        
-        # get refrence information styletts way --- IGNORE THIS SECTION
+
+        # get reference information styletts way --- IGNORE THIS SECTION
         # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
-        
+
         # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
         # ref_audio = torch.from_numpy(ref_audio)
-        
+
         # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
-        
-        
-        
-        
+
         sample = {
             'data': audio,
             'target': audio,
@@ -372,10 +363,8 @@ class VCTKTime(VCTK):
             'ref_audio': ref_audio,
             # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
         }
-        
+
         if self.transform is not None:
             sample = self.transform(sample)
-        
-        return sample
 
-    
+        return sample

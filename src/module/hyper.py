@@ -16,13 +16,13 @@ def process_control():
 
     cfg['wav_length'] = cfg['sample_rate'] * cfg['segment_seconds']
     mel_shape = [1, cfg['n_mel_channels'], int(cfg['wav_length'] / cfg['hop_length']) + 1]
-    
+
     cfg['model'] = {}
     cfg['model']['model_name'] = cfg['model_name']
     data_shape = {'MNIST': [1, 28, 28], 'FashionMNIST': [1, 28, 28], 'SVHN': [3, 32, 32], 'CIFAR10': [3, 32, 32],
                   'CIFAR100': [3, 32, 32], 'VCTKTime': [1, cfg['wav_length']], 'VCTKMel': mel_shape}
-    target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10, 
-                   'CIFAR10': 10, 'CIFAR100': 100, 
+    target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10,
+                   'CIFAR10': 10, 'CIFAR100': 100,
                    'VCTKTime': cfg['wav_length'], 'VCTKMel': np.prod(mel_shape)}
     cfg['model']['data_shape'] = data_shape[cfg['data_name']]
     cfg['model']['target_size'] = target_size[cfg['data_name']]
@@ -43,7 +43,7 @@ def process_control():
     cfg[tag]['optimizer']['betas'] = (0.9, 0.999)
     cfg[tag]['optimizer']['weight_decay'] = 5e-4
     cfg[tag]['optimizer']['nesterov'] = True
-    cfg[tag]['optimizer']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size'], 'val': cfg['batch_size']}
+    cfg[tag]['optimizer']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
     cfg[tag]['optimizer']['step_period'] = cfg['step_period']
     cfg[tag]['optimizer']['num_steps'] = cfg['num_steps']
     cfg[tag]['optimizer']['scheduler_name'] = 'CosineAnnealingLR'
