@@ -11,6 +11,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 from module import check_exists, makedir_exist_ok, save, load
+from .utils import download_url, extract_file, make_classes_counts
 from config import cfg
 
 
@@ -19,20 +20,17 @@ class VCTK(Dataset):
         assert split in ['train', 'test', 'val']
 
         self.root = root
-        self.file = 'https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip'
+        self.file = ('https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip', None)
         self.split = split
         self.transform = transform
         self.sample_rate = cfg['sample_rate']
         self.sr_int = str(int(self.sample_rate // 1e3))
 
-        if not check_exists(self.processed_folder) or not check_exists(
-                os.path.join(self.processed_folder, self.split + self.sr_int)):
-            print("Processing...")
+        if not check_exists(self.processed_folder):
             self.process()
-        self.data = pd.read_pickle(os.path.join(self.processed_folder, self.split + self.sr_int))
+        self.data = load(os.path.join(self.processed_folder, self.sr_int, self.split))
         self.other = {}
-
-        self.speaker_to_idx = load(os.path.join(self.processed_folder, 'meta' + self.sr_int))
+        self.meta = load(os.path.join(self.processed_folder, self.sr_int, 'meta'))
 
     def __len__(self):
         return len(self.data)
@@ -50,58 +48,18 @@ class VCTK(Dataset):
             self.download()
         if not check_exists(os.path.join(self.raw_folder, 'wav' + self.sr_int)):
             self.downsample()
-
-        os.makedirs(self.processed_folder, exist_ok=True)
-
-        train_set, val_set, test_set = self.make_data()
-        train_set.to_pickle(os.path.join(self.processed_folder, 'train' + self.sr_int))
-        val_set.to_pickle(os.path.join(self.processed_folder, 'val' + self.sr_int))
-        test_set.to_pickle(os.path.join(self.processed_folder, 'test' + self.sr_int))
-
-        unique_speakers = (train_set['speaker_id'].unique().tolist() +
-                           val_set['speaker_id'].unique().tolist() +
-                           test_set['speaker_id'].unique().tolist())
-
-        speaker_to_idx = {speaker: idx for idx, speaker in enumerate(unique_speakers)}
-        save(speaker_to_idx, os.path.join(self.processed_folder, 'meta' + self.sr_int))
+        train_set, test_set, meta = self.make_data()
+        save(train_set, os.path.join(self.processed_folder, self.sr_int, 'train'))
+        save(test_set, os.path.join(self.processed_folder, self.sr_int, 'test'))
+        save(meta, os.path.join(self.processed_folder, self.sr_int, 'meta'))
         return
 
     def download(self):
-        makedir_exist_ok(self.raw_folder)
-        # Define the URL and the target paths
-        url = self.file
-        data_dir = self.raw_folder
-        download_path = os.path.join(data_dir, 'VCTK-Corpus-0.92.zip')
-        extract_path = os.path.join(data_dir, 'VCTK')
-
-        # Ensure the data directory exists
-        os.makedirs(data_dir, exist_ok=True)
-
-        # Download the dataset
-        print(f"Downloading VCTK dataset from {url}. This may take a long time...")
-        response = requests.get(url, stream=True)
-        with open(download_path, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                file.write(chunk)
-        print("Download complete.")
-
-        # Unzip the file
-        print(f"Extracting {download_path} to {data_dir}...")
-        with zipfile.ZipFile(download_path, 'r') as zip_ref:
-            zip_ref.extractall(data_dir)
-        print("Extraction complete.")
-
-        # Find the extracted folder and rename it to "VCTK"
-        extracted_folder_name = 'VCTK-Corpus-0.92'
-        original_extract_path = os.path.join(data_dir, extracted_folder_name)
-
-        if os.path.exists(original_extract_path):
-            os.rename(original_extract_path, extract_path)
-            print(f"Renamed {original_extract_path} to {extract_path}")
-        else:
-            print(f"Expected extracted folder {original_extract_path} not found")
-
-        print(f"VCTK dataset is ready at {extract_path}")
+        url, md5 = self.file
+        filename = os.path.basename(url)
+        if not os.path.exists(os.path.join(self.raw_folder, filename)):
+            download_url(url, os.path.join(self.raw_folder, filename), md5)
+        extract_file(os.path.join(self.raw_folder, filename))
         return
 
     def __repr__(self):
@@ -147,6 +105,7 @@ class VCTK(Dataset):
 
             # Export the downsampled audio file as a .wav file using soundfile
             sf.write(output_file_path, audio_resampled, self.sample_rate)
+        return
 
     def read_speaker_info(self):
         speaker_info_path = os.path.join(self.raw_folder, 'speaker-info.txt')
@@ -175,54 +134,42 @@ class VCTK(Dataset):
         wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
         speaker_info = self.read_speaker_info()
 
-        dataset = []
-
         files_to_process = []
         for root, dirs, files in os.walk(wav_dir):
             for file in files:
                 if file.endswith(".wav"):
                     files_to_process.append((root, file))
 
+        dataset = []
+        id = []
         for root, file in tqdm(files_to_process, desc="Creating dataset", unit="file"):
             file_path = os.path.join(root, file)
             file_name = os.path.basename(file)
             speaker_id = file_name.split("_")[0]
-
+            id.append(speaker_id)
             speaker_meta = speaker_info.get(speaker_id, {})
             entry = {
-                "speaker_id": speaker_id,
-                "path": file_path
+                "id": speaker_id,
+                "path": file_path,
+                "meta": speaker_meta
             }
             dataset.append(entry)
 
         df = pd.DataFrame(dataset)
-        train_df, val_df, test_df = self.split_dataset(df)
+        unique_speakers = np.unique(id)
+        print(unique_speakers)
+        exit()
+        speaker_to_idx = {speaker: idx for idx, speaker in enumerate(unique_speakers)}
 
-        return train_df, val_df, test_df
+        train_df, test_df = self.split_dataset(df)
+        return train_df, test_df, speaker_to_idx
 
-    def split_dataset(self, df, train_size=0.7, val_size=0.15, test_size=0.15, random_state=42):
-        # Ensure the split proportions sum to 1
-        assert train_size + val_size + test_size == 1.0, "Train, validation, and test sizes must sum to 1.0"
-
-        # Get unique speakers
-        speakers = df['speaker_id'].unique()
-
-        # Split speakers into train and temp (val + test)
-        train_speakers, temp_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
-
-        # Calculate the proportion for validation in the temp split
-        val_proportion = val_size / (val_size + test_size)
-
-        # Split temp_speakers into validation and test sets
-        val_speakers, test_speakers = train_test_split(temp_speakers, train_size=val_proportion,
-                                                       random_state=random_state)
-
-        # Assign entries to the respective sets
-        train_df = df[df['speaker_id'].isin(train_speakers)]
-        val_df = df[df['speaker_id'].isin(val_speakers)]
-        test_df = df[df['speaker_id'].isin(test_speakers)]
-
-        return train_df, val_df, test_df
+    def split_dataset(self, df, train_size=0.8, random_state=42):
+        speakers = df['id'].unique()
+        train_speakers, test_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
+        train_df = df[df['id'].isin(train_speakers)]
+        test_df = df[df['id'].isin(test_speakers)]
+        return train_df, test_df
 
 
 class VCTKMel(VCTK):
