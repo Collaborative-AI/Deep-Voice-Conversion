@@ -125,3 +125,4 @@ res/
 .DS_Store
 scripts/
 
+.ipynb/
