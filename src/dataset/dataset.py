@@ -6,7 +6,6 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from config import cfg
-from torch.nn.utils.rnn import pad_sequence
 
 data_stats = {'MNIST': ((0.1307,), (0.3081,)), 'FashionMNIST': ((0.2860,), (0.3530,)),
               'CIFAR10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -56,6 +55,7 @@ def make_dataset(data_name, verbose=True):
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
     elif data_name in ['VCTKTime', 'VCTKMel']:
+        root = os.path.join('data', 'VCTK')
         dataset_['train'] = eval('dataset.{}(root=root, split="train")'.format(data_name))
         dataset_['test'] = eval('dataset.{}(root=root, split="test")'.format(data_name))
     else:

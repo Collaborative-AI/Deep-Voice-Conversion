@@ -1,5 +1,3 @@
-import requests
-import zipfile
 import librosa
 import soundfile as sf
 import pandas as pd
@@ -10,22 +8,19 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
-from module import check_exists, makedir_exist_ok, save, load
-from .utils import download_url, extract_file, make_classes_counts
+from module import check_exists, save, load
+from .utils import download_url, extract_file
 from config import cfg
 
 
 class VCTK(Dataset):
     def __init__(self, root, split, transform=None):
-        assert split in ['train', 'test', 'val']
-
         self.root = root
         self.file = ('https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip', None)
         self.split = split
         self.transform = transform
         self.sample_rate = cfg['sample_rate']
         self.sr_int = str(int(self.sample_rate // 1e3))
-
         if not check_exists(self.processed_folder):
             self.process()
         self.data = load(os.path.join(self.processed_folder, self.sr_int, self.split))
@@ -130,7 +125,6 @@ class VCTK(Dataset):
         return speaker_info
 
     def make_data(self):
-        # Define paths
         wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
         speaker_info = self.read_speaker_info()
 
@@ -157,14 +151,12 @@ class VCTK(Dataset):
 
         df = pd.DataFrame(dataset)
         unique_speakers = np.unique(id)
-        print(unique_speakers)
-        exit()
         speaker_to_idx = {speaker: idx for idx, speaker in enumerate(unique_speakers)}
-
+        df['idx'] = df['id'].map(speaker_to_idx)
         train_df, test_df = self.split_dataset(df)
         return train_df, test_df, speaker_to_idx
 
-    def split_dataset(self, df, train_size=0.8, random_state=42):
+    def split_dataset(self, df, train_size=90, random_state=42):
         speakers = df['id'].unique()
         train_speakers, test_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
         train_df = df[df['id'].isin(train_speakers)]
@@ -189,11 +181,9 @@ class VCTKMel(VCTK):
 
         # get target information
         row = self.data.iloc[idx]
-
         og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
         og_audio = torch.from_numpy(og_audio)
-
-        speaker_id = self.speaker_to_idx[row['speaker_id']]
+        speaker_id = row['idx']
 
         # get reference information b-vae way --- ADHERE TO THESE COMMENTS
         ## get max wave len random section of audio 
@@ -211,10 +201,8 @@ class VCTKMel(VCTK):
 
         # get reference information styletts way --- IGNORE THIS SECTION
         # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
-
         # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
         # ref_audio = torch.from_numpy(ref_audio)
-
         # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
 
         mel_audio = librosa.feature.melspectrogram(y=audio.numpy(),
@@ -274,11 +262,9 @@ class VCTKTime(VCTK):
 
         # get target information
         row = self.data.iloc[idx]
-
         og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
         og_audio = torch.from_numpy(og_audio)
-
-        speaker_id = self.speaker_to_idx[row['speaker_id']]
+        speaker_id = row['idx']
 
         # get reference information b-vae way --- ADHERE TO THESE COMMENTS
         ## get max wave len random section of audio 
@@ -296,10 +282,8 @@ class VCTKTime(VCTK):
 
         # get reference information styletts way --- IGNORE THIS SECTION
         # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
-
         # ref_audio, sr = librosa.load(ref_row['path'], sr=SR)
         # ref_audio = torch.from_numpy(ref_audio)
-
         # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
 
         sample = {
@@ -310,7 +294,6 @@ class VCTKTime(VCTK):
             'ref_audio': ref_audio,
             # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
         }
-
         if self.transform is not None:
             sample = self.transform(sample)
 
