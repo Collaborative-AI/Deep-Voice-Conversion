@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from collections import defaultdict
+from .audio import ASR, SSIM
 
 
 def make_metric(split, **kwargs):
@@ -81,8 +82,12 @@ class Metric:
                 elif m == 'MSE':
                     metric[split][m] = {'mode': 'batch',
                                         'metric': (lambda input, output: MSE(output['target'], input['target']))}
+                elif m == 'SSIM':
+                    metric[split][m] = {'mode': 'batch', 'metric': SSIM()}
                 elif m == 'RMSE':
                     metric[split][m] = {'mode': 'full', 'metric': RMSE()}
+                elif m == 'ASR':
+                    metric[split][m] = {'mode': 'full', 'metric': ASR()}
                 else:
                     raise ValueError('Not valid metric name')
         return metric
