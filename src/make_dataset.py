@@ -16,7 +16,6 @@ if __name__ == "__main__":
     with torch.no_grad():
         for data_name in data_names:
             dataset = make_dataset(data_name)
-            dataset['train'].transform = Compose([transforms.ToTensor()])
             process_dataset(dataset)
             cfg['step'] = 0
             data_loader = make_data_loader(dataset, cfg[cfg['tag']]['optimizer']['batch_size'], shuffle=False)
