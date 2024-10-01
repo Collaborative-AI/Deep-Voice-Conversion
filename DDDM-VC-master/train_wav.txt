@@ -1,2 +1,0 @@
-/workspace/raid/dataset/LibriTTS_16k/train-clean-360/100/121669/100_121669_000001_000000.wav
-/workspace/raid/dataset/LibriTTS_16k/train-clean-360/100/121669/100_121669_000003_000000.wav
