@@ -1,3 +1,5 @@
+pipe-env/
+dvc-venv/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -124,5 +126,3 @@ res/
 .vscode/
 .DS_Store
 scripts/
-
-.ipynb/

@@ -1,0 +1,2 @@
+/workspace/raid/dataset/LibriTTS_f0_norm/train-clean-360/100/121669/100_121669_000001_000000.pt
+/workspace/raid/dataset/LibriTTS_f0_norm/train-clean-360/100/121669/100_121669_000003_000000.pt
