@@ -126,3 +126,5 @@ res/
 scripts/
 
 .ipynb/
+
+dvc-venv/

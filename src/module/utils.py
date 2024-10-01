@@ -34,3 +34,5 @@ def to_device(input, device):
     output = apply_recursively(fn, input, device,
                                apply_condition=apply_condition, identity_condition=identity_condition)
     return output
+
+
