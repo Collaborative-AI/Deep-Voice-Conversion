@@ -89,6 +89,20 @@ def infinite_iter(iterable):
             it = iter(iterable)
 
 
+"""MAIN-VC model
+    Modified from: https://github.com/jjery2243542/adaptive_voice_conversion
+    Compare to v0, the conv_bank of ContentEncoder of AdaIN-VC is retained.
+    (while APC in v0)
+"""
+
+import sys
+import torch
+import torch.nn as nn
+
+sys.path.append("..")
+from models.tools import *
+
+
 class SpeakerEncoder(nn.Module):
     def __init__(
         self,
@@ -115,7 +129,7 @@ class SpeakerEncoder(nn.Module):
         self.subsample = subsample
         self.act = get_act_func(act)
 
-        # Build speaker encoder
+        # build spk. encoder
         self.APC_module = nn.ModuleList(
             [
                 nn.Conv1d(
@@ -225,14 +239,14 @@ class SpeakerEncoder(nn.Module):
     def forward(self, x):
         # APC
         out = self.APC_forward(x, act=self.act)
-        # Dimension reduction
+        # dimension reduction
         out = pad_layer(out, self.in_conv_layer)
         out = self.act(out)
-        # Conv blocks
+        # conv blocks
         out = self.conv_blocks(out)
-        # Avg pooling
+        # avg pooling
         out = self.pooling_layer(out).squeeze(2)
-        # Dense blocks
+        # dense blocks
         out = self.dense_blocks(out)
         out = self.output_layer(out)
         return out
@@ -257,12 +271,12 @@ class ContentEncoder(nn.Module):
         self.c_bank = c_bank
         self.n_conv_blocks = n_conv_blocks
         self.subsample = subsample
-        # Hard coding for testing
+        # hard coding for testing
         self.bank_scale = 2
         self.bank_size = 9
         self.act = get_act_func(act)
 
-        # Build content encoder
+        # build content encoder
         self.conv_bank = nn.ModuleList(
             [
                 nn.Conv1d(c_in, c_bank, kernel_size=k)
@@ -355,70 +369,89 @@ class Decoder(nn.Module):
         self.conv_affine_layers = nn.ModuleList(
             [f(nn.Linear(c_cond, c_h * 2)) for _ in range(n_conv_blocks * 2)]
         )
-        self.output_layer = nn.Conv1d(c_h, c_out, kernel_size=1)
+        self.out_conv_layer = f(nn.Conv1d(c_h, c_out, kernel_size=1))
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
-    def upsample_block(self, x):
-        for i in range(self.n_conv_blocks):
-            y = pad_layer(x, self.first_conv_layers[i])
+    def forward(self, z, cond):
+        out = pad_layer(z, self.in_conv_layer)
+        out = self.norm_layer(out)
+        out = self.act(out)
+        out = self.dropout_layer(out)
+        for l in range(self.n_conv_blocks):
+            y = pad_layer(out, self.first_conv_layers[l])
             y = self.norm_layer(y)
+            y = adaIn(y, self.conv_affine_layers[l * 2](cond))
             y = self.act(y)
             y = self.dropout_layer(y)
-            y = pad_layer(y, self.second_conv_layers[i])
+            y = pad_layer(y, self.second_conv_layers[l])
+            if self.upsample[l] > 1:
+                y = pixel_shuffle_1d(y, scale_factor=self.upsample[l])
             y = self.norm_layer(y)
+            y = adaIn(y, self.conv_affine_layers[l * 2 + 1](cond))
             y = self.act(y)
             y = self.dropout_layer(y)
-            x = y + x
-        return x
-
-    def forward(self, z, c):
-        # Apply affine transformation
-        a = self.conv_affine_layers[0](c).unsqueeze(2)
-        z = z + a[:, : z.shape[1], :]
-        for i in range(self.n_conv_blocks):
-            z = self.upsample_block(z)
-            a = self.conv_affine_layers[i * 2 + 1](c).unsqueeze(2)
-            z = z + a[:, : z.shape[1], :]
-        out = pad_layer(z, self.output_layer)
+            if self.upsample[l] > 1:
+                out = y + upsample(out, scale_factor=self.upsample[l])
+            else:
+                out = y + out
+        out = pad_layer(out, self.out_conv_layer)
         return out
 
 
 class MAINVC(nn.Module):
-    def __init__(self, speaker_encoder, content_encoder, decoder):
+    def __init__(self, config):
         super(MAINVC, self).__init__()
-        self.speaker_encoder = speaker_encoder
-        self.content_encoder = content_encoder
-        self.decoder = decoder
+        self.speaker_encoder = SpeakerEncoder(**config["SpeakerEncoder"])
+        self.content_encoder = ContentEncoder(**config["ContentEncoder"])
+        self.decoder = Decoder(**config["Decoder"])
 
-    def forward(self, x, y):
-        cond = self.speaker_encoder(x)  # Speaker encoding
-        mu, sigma = self.content_encoder(y)  # Content encoding
-        dec = self.decoder(mu, cond)  # Decode
+    def forward(self, x, x_sf, x_):
+        emb = self.speaker_encoder(x_sf)
+        emb_ = self.speaker_encoder(x_)
+        mu, log_sigma = self.content_encoder(x)
+        eps = log_sigma.new(*log_sigma.size()).normal_(0, 1)
+        dec = self.decoder(mu + torch.exp(log_sigma / 2) * eps, emb)
+        return mu, log_sigma, emb, emb_, dec
+
+    def inference(self, x, x_cond):
+        emb = self.speaker_encoder(x_cond)
+        mu, _ = self.content_encoder(x)
+        dec = self.decoder(mu, emb)
         return dec
 
+    def get_speaker_embedding(self, x):
+        emb = self.speaker_encoder(x)
+        return emb
 
-# Load configuration
-with open("config.yaml") as f:
+
+"""
+# __________test__________
+import yaml
+import time
+with open("../config.yaml") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-# Initialize models
-speaker_encoder = SpeakerEncoder(**config["SpeakerEncoder"])
-content_encoder = ContentEncoder(**config["ContentEncoder"])
-decoder = Decoder(**config["Decoder"])
-main_vc = MAINVC(speaker_encoder, content_encoder, decoder)
+Es = SpeakerEncoder(**config["SpeakerEncoder"])
+Ec = ContentEncoder(**config["ContentEncoder"])
+D = Decoder(**config["Decoder"])
 
-# Generate random input data for testing
-x = torch.randn(1, 80, 128)  # Random tensor for content input
-y = torch.randn(1, 80, 128)  # Random tensor for speaker input
+x = torch.randn(1, 80, 128)
+y = torch.randn(1, 80, 128)
 
-# Inference time test
+# inference time test
 start_time = time.time()
 
-dec = main_vc(x, y)  # Forward pass
+cond = Es(x)
+mu = Ec(y)[0]
+dec = D(mu, cond)
 
 end_time = time.time()
 
-print(f"Inference time cost: {end_time - start_time:.4f} seconds")
-print(f"Converted mel shape: {dec.shape}")
+print(f"inference time cost: {(end_time-start_time)/100}")
+
+print(f"content embedding shape (emb): {cond.shape}")
+print(f"speaker embedding shape (mu): {mu.shape}")
+print(f"converted mel shape: {dec.shape}")
+"""
 
 
