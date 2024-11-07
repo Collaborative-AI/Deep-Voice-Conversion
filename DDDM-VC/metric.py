@@ -1,16 +1,16 @@
 import jiwer
 import torch
 import torchaudio
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Tokenizer, Wav2Vec2Processor, WavLMForCTC
+from transformers import AutoProcessor, AutoModelForCTC, Wav2Vec2Processor, WavLMForCTC
 from scipy.spatial.distance import cosine
 
 
-ASR_PRETRAINED_MODEL = "facebook/wav2vec2-large-960h-lv60-self"
+ASR_PRETRAINED_MODEL = "facebook/hubert-large-ls960-ft"
 
 def load_asr():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = Wav2Vec2ForCTC.from_pretrained(ASR_PRETRAINED_MODEL).to(device)
-    tokenizer = Wav2Vec2Tokenizer.from_pretrained(ASR_PRETRAINED_MODEL)
+    model = AutoModelForCTC.from_pretrained(ASR_PRETRAINED_MODEL).to(device)
+    tokenizer = AutoProcessor.from_pretrained(ASR_PRETRAINED_MODEL)
     models = {"model": model, "tokenizer": tokenizer}
     return models
 
@@ -61,22 +61,25 @@ def extract_embedding(wav_path, processor, model):
     if sample_rate != 16000:
         resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
         waveform = resampler(waveform)
-        
+
+    # Squeeze the waveform to remove any extra dimensions
     waveform = waveform.squeeze()
 
     # Process the waveform using the feature extractor
     inputs = processor(waveform, sampling_rate=16000, return_tensors="pt", padding=True)
+
+    # Move inputs to GPU if available
     input_values = inputs.input_values.to("cuda")
 
-     # Extract WavLM embeddings
+    # Extract WavLM embeddings
     with torch.no_grad():
-        outputs = model(**input_values)
-        logits = outputs.logits
+        outputs = model(input_values, output_hidden_states=True)  # Enable hidden states output
 
-        # Average over time steps to create a speaker embedding
-        embedding = logits.mean(dim=1).squeeze()  # Average over time steps
+        # Use the last hidden state as the embedding
+        hidden_states = outputs.hidden_states[-1]  # Last layer's hidden state
+        embedding = hidden_states.mean(dim=1).squeeze()  # Average over time steps
 
-    return embedding.cpu()
+    return embedding.cpu()  
 
 def speaker_sim(embedding1, embedding2):
     return 1 - cosine(embedding1.numpy(), embedding2.numpy())
