@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
+from scipy.signal import lfilter
 from module import check_exists, save, load
 from .utils import download_url, extract_file
 from config import cfg
@@ -181,7 +182,7 @@ class VCTKMel(VCTK):
 
         # get target information
         row = self.data.iloc[idx]
-        og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
+        og_audio = load_wav(row['path'], cfg['sample_rate'])
         og_audio = torch.from_numpy(og_audio)
         speaker_id = row['idx']
 
@@ -205,29 +206,38 @@ class VCTKMel(VCTK):
         # ref_audio = torch.from_numpy(ref_audio)
         # ref_speaker_id = speaker_to_idx[ref_row['speaker_id']]
 
-        mel_audio = librosa.feature.melspectrogram(y=audio.numpy(),
-                                                   sr=cfg['sample_rate'],
-                                                   n_fft=cfg['filter_length'],
-                                                   hop_length=cfg["hop_length"],
-                                                   win_length=cfg["win_length"],
-                                                   fmin=cfg['mel_fmin'],
-                                                   fmax=cfg['mel_fmax'],
-                                                   n_mels=cfg["n_mel_channels"],
-                                                   window=torch.hann_window)
+        # mel_audio = librosa.feature.melspectrogram(y=audio.numpy(),
+        #                                            sr=cfg['sample_rate'],
+        #                                            n_fft=cfg['n_fft'],
+        #                                            hop_length=cfg["hop_length"],
+        #                                            win_length=cfg["win_length"],
+        #                                            fmin=cfg['fmin'],
+        #                                            fmax=cfg['fmax'],
+        #                                            n_mels=cfg["n_mels"],
+        #                                            window=torch.hann_window)
 
-        ref_mel_audio = librosa.feature.melspectrogram(y=ref_audio.numpy(),
-                                                       sr=cfg['sample_rate'],
-                                                       n_fft=cfg['filter_length'],
-                                                       hop_length=cfg["hop_length"],
-                                                       win_length=cfg["win_length"],
-                                                       fmin=cfg['mel_fmin'],
-                                                       fmax=cfg['mel_fmax'],
-                                                       n_mels=cfg["n_mel_channels"],
-                                                       window=torch.hann_window)
+        mel_audio = log_mel_spectrogram(y=audio.numpy(),
+                                        preemph=cfg['preemph'],
+                                        sample_rate=cfg['sample_rate'],
+                                        n_mels=cfg['n_mels'],
+                                        n_fft=cfg['n_fft'],
+                                        hop_length=cfg['hop_length'],
+                                        win_length=cfg['win_length'],
+                                        fmin=cfg['fmin'],
+                                        fmax=cfg['fmax'])
+        # ref_mel_audio = librosa.feature.melspectrogram(y=ref_audio.numpy(),
+        #                                                sr=cfg['sample_rate'],
+        #                                                n_fft=cfg['n_fft'],
+        #                                                hop_length=cfg["hop_length"],
+        #                                                win_length=cfg["win_length"],
+        #                                                fmin=cfg['fmin'],
+        #                                                fmax=cfg['fmax'],
+        #                                                n_mels=cfg["n_mels"],
+        #                                                window=torch.hann_window)
 
         mel_audio = torch.from_numpy(mel_audio)  # REVIEW HERE: switches between torch and np may be inefficient
-        ref_mel_audio = torch.from_numpy(ref_mel_audio)
-        mel_audio = mel_audio.unsqueeze(0)
+        # ref_mel_audio = torch.from_numpy(ref_mel_audio)
+        # mel_audio = mel_audio.unsqueeze(0)
 
         sample = {
             'data': mel_audio,
@@ -235,7 +245,7 @@ class VCTKMel(VCTK):
             'target': torch.flatten(mel_audio),
             # 'length': length,
             'speaker_id': torch.tensor(speaker_id, dtype=torch.long),  # Numeric speaker ID
-            'ref_audio': ref_mel_audio,
+            # 'ref_audio': ref_mel_audio,
             # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
         }
 
@@ -262,11 +272,11 @@ class VCTKTime(VCTK):
 
         # get target information
         row = self.data.iloc[idx]
-        og_audio, sr = librosa.load(row['path'], sr=cfg['sample_rate'])
+        og_audio = load_wav(row['path'], cfg['sample_rate'])
         og_audio = torch.from_numpy(og_audio)
         speaker_id = row['idx']
 
-        # get reference information b-vae way --- ADHERE TO THESE COMMENTS
+        # get reference information b-vae way --- ADHERE TO THESE COMMENTS # TODO: this nees check
         ## get max wave len random section of audio 
         ## get another max wav len random section of audio -- this is ref audio
         if len(og_audio) > cfg['wav_length']:
@@ -298,3 +308,43 @@ class VCTKTime(VCTK):
             sample = self.transform(sample)
 
         return sample
+
+
+def load_wav(audio_path, sample_rate, trim=False):
+    """Load and preprocess waveform."""
+    wav, _ = librosa.load(audio_path, sr=sample_rate)
+    wav = wav / (np.abs(wav).max() + 1e-6)  # TODO This nees check
+    if trim:
+        _, (start_frame, end_frame) = librosa.effects.trim(
+            wav, top_db=25, frame_length=512, hop_length=128
+        )
+        start_frame = max(0, start_frame - 0.1 * sample_rate)
+        end_frame = min(len(wav), end_frame + 0.1 * sample_rate)
+
+        start = int(start_frame)
+        end = int(end_frame)
+        if end - start > 1000:
+            wav = wav[start:end]
+    return wav
+
+
+def log_mel_spectrogram(
+        y: np.ndarray,
+        preemph: float,
+        sample_rate: int,
+        n_mels: int,
+        n_fft: int,
+        hop_length: int,
+        win_length: int,
+        fmin: int,
+        fmax: int,
+) -> np.ndarray:
+    """Create a log Mel spectrogram from a raw audio signal."""
+    y = lfilter([1, -preemph], [1], y)
+    magnitude = np.abs(
+        librosa.stft(y=y, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    )
+    mel_fb = librosa.filters.mel(sr=sample_rate, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax)
+    mel_spec = np.dot(mel_fb, magnitude)
+    log_mel_spec = np.log(mel_spec + 1e-9).T
+    return log_mel_spec  # shape(T, n_mels)

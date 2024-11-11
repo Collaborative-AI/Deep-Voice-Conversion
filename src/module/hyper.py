@@ -14,8 +14,23 @@ def process_control():
     # cfg['num_epochs'] = 400
     cfg['collate_mode'] = 'dict'
 
+    cfg['sample_rate'] = 16000
+    cfg['segment_seconds'] = 1
+
+    # VCTKTime
+    cfg['audio_pad_id'] = 0
+
+    # VCTKMel
+    cfg['preemph'] = 0.97
+    cfg['n_fft'] = 2048
+    cfg['hop_length'] = 300
+    cfg['win_length'] = 1200
+    cfg['fmin'] = 80
+    cfg['fmax'] = 8000
+    cfg['n_mels'] = 80
+
     cfg['wav_length'] = cfg['sample_rate'] * cfg['segment_seconds']
-    mel_shape = [1, cfg['n_mel_channels'], int(cfg['wav_length'] / cfg['hop_length']) + 1]
+    mel_shape = [1, cfg['n_mels'], int(cfg['wav_length'] / cfg['hop_length']) + 1]
 
     cfg['model'] = {}
     cfg['model']['model_name'] = cfg['model_name']

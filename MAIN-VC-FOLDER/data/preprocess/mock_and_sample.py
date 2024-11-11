@@ -5,15 +5,24 @@ import numpy as np
 import json  # Import json for handling JSON data
 
 # Mock HyperParameters class
+# class HyperParameters:
+#     sr = 16000  # Sample rate
+#     preemph = 0.97
+#     n_fft = 1024
+#     n_mels = 80
+#     hop_len = 256
+#     win_len = 1024
+#     f_min = 0
+
 class HyperParameters:
     sr = 16000  # Sample rate
     preemph = 0.97
-    n_fft = 1024
+    n_fft = 2048
     n_mels = 80
-    hop_len = 256
-    win_len = 1024
-    f_min = 0
-
+    hop_len = 300
+    win_len = 1200
+    f_min = 80
+    
 hp = HyperParameters()
 
 # Mock function to read speaker information
@@ -163,6 +172,14 @@ def main():
                 print(f"[MAIN-VC](make_datasets) processed {i} file of {dataset_type} set")
             filename = os.path.basename(path)
             wav = load_wav(path, hp.sr)
+            print(wav.shape)
+            print(hp.preemph)
+            print(hp.sr)
+            print(hp.n_mels)
+            print(hp.n_fft)
+            print(hp.hop_len)
+            print(hp.win_len)
+            print(hp.f_min)
             mel = log_mel_spectrogram(
                 wav,
                 hp.preemph,
@@ -173,6 +190,8 @@ def main():
                 hp.win_len,
                 hp.f_min,
             )
+            print(mel.shape)
+            exit()
             data[filename] = mel
 
             if dataset_type == "train" and i < n_utts_attr:
