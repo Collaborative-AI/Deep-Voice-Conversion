@@ -182,23 +182,32 @@ class VCTKMel(VCTK):
 
         # get target information
         row = self.data.iloc[idx]
-        og_audio = load_wav(row['path'], cfg['sample_rate'])
+        og_audio = load_wav(row['path'], self.sample_rate)
         og_audio = torch.from_numpy(og_audio)
         speaker_id = row['idx']
 
-        # get reference information b-vae way --- ADHERE TO THESE COMMENTS
-        ## get max wave len random section of audio 
-        ## get another max wav len random section of audio -- this is ref audio
         if len(og_audio) > cfg['wav_length']:
             start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
             audio = og_audio[start_idx:start_idx + cfg['wav_length']]
-            ref_start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
-            ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['wav_length']]
-            length = cfg['wav_length']
+            # length = cfg['wav_length']
         else:
             audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            length = og_audio.shape[-1]
+            # ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            # length = og_audio.shape[-1]
+
+        # # get reference information b-vae way --- ADHERE TO THESE COMMENTS
+        # ## get max wave len random section of audio
+        # ## get another max wav len random section of audio -- this is ref audio
+        # if len(og_audio) > cfg['wav_length']:
+        #     start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+        #     audio = og_audio[start_idx:start_idx + cfg['wav_length']]
+        #     ref_start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+        #     ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['wav_length']]
+        #     length = cfg['wav_length']
+        # else:
+        #     audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+        #     ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+        #     length = og_audio.shape[-1]
 
         # get reference information styletts way --- IGNORE THIS SECTION
         # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
@@ -241,7 +250,8 @@ class VCTKMel(VCTK):
 
         sample = {
             'data': mel_audio,
-            'wav': audio,
+            # 'wav': audio,
+            # 'target': torch.flatten(mel_audio),
             'target': torch.flatten(mel_audio),
             # 'length': length,
             'speaker_id': torch.tensor(speaker_id, dtype=torch.long),  # Numeric speaker ID
@@ -276,19 +286,28 @@ class VCTKTime(VCTK):
         og_audio = torch.from_numpy(og_audio)
         speaker_id = row['idx']
 
-        # get reference information b-vae way --- ADHERE TO THESE COMMENTS # TODO: this nees check
-        ## get max wave len random section of audio 
-        ## get another max wav len random section of audio -- this is ref audio
         if len(og_audio) > cfg['wav_length']:
             start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
             audio = og_audio[start_idx:start_idx + cfg['wav_length']]
-            ref_start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
-            ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['wav_length']]
-            length = cfg['wav_length']
+            # length = cfg['wav_length']
         else:
             audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
-            length = og_audio.shape[-1]
+            # ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+            # length = og_audio.shape[-1]
+
+        # get reference information b-vae way --- ADHERE TO THESE COMMENTS # TODO: this nees check
+        ## get max wave len random section of audio 
+        ## get another max wav len random section of audio -- this is ref audio
+        # if len(og_audio) > cfg['wav_length']:
+        #     start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+        #     audio = og_audio[start_idx:start_idx + cfg['wav_length']]
+        #     ref_start_idx = np.random.randint(0, len(og_audio) - cfg['wav_length'])
+        #     ref_audio = og_audio[ref_start_idx:ref_start_idx + cfg['wav_length']]
+        #     length = cfg['wav_length']
+        # else:
+        #     audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+        #     ref_audio = F.pad(og_audio, (0, cfg['wav_length'] - og_audio.shape[-1]), 'constant', cfg['audio_pad_id'])
+        #     length = og_audio.shape[-1]
 
         # get reference information styletts way --- IGNORE THIS SECTION
         # ref_row = self.data[self.data['speaker_id'] == row['speaker_id']].sample(1).iloc[0]
@@ -299,9 +318,9 @@ class VCTKTime(VCTK):
         sample = {
             'data': audio,
             'target': audio,
-            'length': length,
+            # 'length': length,
             'speaker_id': torch.tensor(speaker_id, dtype=torch.long),  # Numeric speaker ID
-            'ref_audio': ref_audio,
+            # 'ref_audio': ref_audio,
             # 'ref_speaker_id': torch.tensor(ref_speaker_id, dtype=torch.long),
         }
         if self.transform is not None:
@@ -313,7 +332,7 @@ class VCTKTime(VCTK):
 def load_wav(audio_path, sample_rate, trim=False):
     """Load and preprocess waveform."""
     wav, _ = librosa.load(audio_path, sr=sample_rate)
-    wav = wav / (np.abs(wav).max() + 1e-6)  # TODO This nees check
+    # wav = wav / (np.abs(wav).max() + 1e-6)  # normalization is not needed here
     if trim:
         _, (start_frame, end_frame) = librosa.effects.trim(
             wav, top_db=25, frame_length=512, hop_length=128
@@ -340,7 +359,8 @@ def log_mel_spectrogram(
         fmax: int,
 ) -> np.ndarray:
     """Create a log Mel spectrogram from a raw audio signal."""
-    y = lfilter([1, -preemph], [1], y)
+    if preemph > 0:
+        y = lfilter([1, -preemph], [1], y)
     magnitude = np.abs(
         librosa.stft(y=y, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     )
