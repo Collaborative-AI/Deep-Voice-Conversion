@@ -21,7 +21,10 @@ class VCTK(Dataset):
         self.split = split
         self.transform = transform
         self.sample_rate = cfg['sample_rate']
+        self.segment_seconds = cfg['segment_seconds']
         self.sr_int = str(int(self.sample_rate // 1e3))
+        self.train_ratio = 0.9
+        self.num_test_out = 10
         if not check_exists(self.processed_folder):
             self.process()
         self.data = load(os.path.join(self.processed_folder, self.sr_int, self.split))
@@ -44,9 +47,10 @@ class VCTK(Dataset):
             self.download()
         if not check_exists(os.path.join(self.raw_folder, 'wav' + self.sr_int)):
             self.downsample()
-        train_set, test_set, meta = self.make_data()
+        train_set, test_in_set, test_out_set, meta = self.make_data()
         save(train_set, os.path.join(self.processed_folder, self.sr_int, 'train'))
-        save(test_set, os.path.join(self.processed_folder, self.sr_int, 'test'))
+        save(test_in_set, os.path.join(self.processed_folder, self.sr_int, 'test_in'))
+        save(test_out_set, os.path.join(self.processed_folder, self.sr_int, 'test_out'))
         save(meta, os.path.join(self.processed_folder, self.sr_int, 'meta'))
         return
 
@@ -125,44 +129,95 @@ class VCTK(Dataset):
                 }
         return speaker_info
 
+    # def speaker_file_paths(self, root_dir):
+    #     speaker2filenames = defaultdict(lambda: [])
+    #     for path in sorted(glob.glob(os.path.join(root_dir, "*/*"))):
+    #         filename = path.strip().split("\\")[-1]  # "\\" for Windows, "/" for Linux
+    #         speaker_id = get_speaker_id(filename)
+    #         speaker2filenames[speaker_id].append(path)
+    #     return speaker2filenames
+    #
+    # def get_speaker_id(self, filename):
+    #     pattern = r'^p\d{3}_(\d{3})\.wav$'
+    #     match = re.search(pattern, filename)
+    #     if match:
+    #         speaker_id = filename.split('_')[0]
+    #     return speaker_id
+
     def make_data(self):
         wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
         speaker_info = self.read_speaker_info()
+        speaker_list = list(speaker_info.keys())
+        train_speakers = speaker_list[:-self.num_test_out]
+        test_out_speakers = speaker_list[-self.num_test_out:]
+        speaker_to_idx = {speaker: idx for idx, speaker in enumerate(speaker_list)}
+        speaker_split = {'train': train_speakers, 'test_out': test_out_speakers}
 
-        files_to_process = []
-        for root, dirs, files in os.walk(wav_dir):
-            for file in files:
-                if file.endswith(".wav"):
-                    files_to_process.append((root, file))
-
-        dataset = []
-        id = []
-        for root, file in tqdm(files_to_process, desc="Creating dataset", unit="file"):
-            file_path = os.path.join(root, file)
-            file_name = os.path.basename(file)
-            speaker_id = file_name.split("_")[0]
-            id.append(speaker_id)
-            speaker_meta = speaker_info.get(speaker_id, {})
+        def make_entry(path_, speaker_):
+            speaker_id = speaker_to_idx.get(speaker_)
+            speaker_meta = speaker_info.get(speaker_)
             entry = {
-                "id": speaker_id,
-                "path": file_path,
-                "meta": speaker_meta
+                "path": path_,
+                "speaker_id": speaker_id,
+                "speaker_meta": speaker_meta
             }
-            dataset.append(entry)
+            return entry
 
-        df = pd.DataFrame(dataset)
-        unique_speakers = np.unique(id)
-        speaker_to_idx = {speaker: idx for idx, speaker in enumerate(unique_speakers)}
-        df['idx'] = df['id'].map(speaker_to_idx)
-        train_df, test_df = self.split_dataset(df)
-        return train_df, test_df, speaker_to_idx
+        train_dataset = []
+        test_in_dataset = []
+        test_out_dataset = []
+        for speaker in tqdm(os.listdir(wav_dir), desc="Creating dataset", unit="speaker"):
+            files = os.listdir(os.path.join(wav_dir, speaker))
+            valid_files = []
+            for file in files:
+                wav = load_wav(os.path.join(wav_dir, speaker, file), self.sample_rate)
+                if len(wav) > self.sample_rate * self.segment_seconds:
+                    valid_files.append(file)
+            if speaker in train_speakers:
+                num_train = int(len(valid_files) * self.train_ratio)
+                train_files = valid_files[:num_train]
+                test_in_files = valid_files[num_train:]
+                for path in train_files:
+                    train_dataset.append(make_entry(path, speaker))
+                for path in test_in_files:
+                    test_in_dataset.append(make_entry(path, speaker))
+            else:
+                for path in valid_files:
+                    test_out_dataset.append(make_entry(path, speaker))
+        # print(train_dataset)
+        # print(test_in_dataset)
+        # print(test_out_dataset)
+        # exit()
 
-    def split_dataset(self, df, train_size=90, random_state=42):
-        speakers = df['id'].unique()
-        train_speakers, test_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
-        train_df = df[df['id'].isin(train_speakers)]
-        test_df = df[df['id'].isin(test_speakers)]
-        return train_df, test_df
+        # for root, dirs, files in os.walk(wav_dir):
+        #     for file in files:
+        #         if file.endswith(".wav"):
+        #             path = os.path.join(root, file)
+        #             speaker = file.split('_')[0]
+        #             if speaker in train_speakers:
+        #                 train_files.append((file, speaker))
+
+        # train_dataset = []
+        # test_in_dataset = []
+        # test_out_dataset = []
+        # for root, speaker, file in tqdm(files_to_process, desc="Creating dataset", unit="file"):
+        #     if speaker in train_speakers:
+        #         file_path = os.path.join(root, file)
+        #
+        #     train_dataset.append(entry)
+
+        # df = pd.DataFrame(dataset)
+        # unique_speakers = np.unique(id)
+        # df['idx'] = df['id'].map(speaker_to_idx)
+        meta = {'speaker_to_idx': speaker_to_idx, 'speaker_split': speaker_split}
+        return train_dataset, test_in_dataset, test_out_dataset, meta
+
+    # def split_dataset(self, df, train_size=90, random_state=42):
+    #     speakers = df['id'].unique()
+    #     train_speakers, test_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
+    #     train_df = df[df['id'].isin(train_speakers)]
+    #     test_df = df[df['id'].isin(test_speakers)]
+    #     return train_df, test_df
 
 
 class VCTKMel(VCTK):
