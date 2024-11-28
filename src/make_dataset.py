@@ -10,7 +10,7 @@ if __name__ == "__main__":
     dim = 1
     # data_names = ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100', 'VCTKTime', 'VCTKMel']
     # data_names = ['VCTKTime', 'VCTKMel']
-    data_names = ['VCTKTime']
+    data_names = ['VCTK']
     cfg['seed'] = 0
     cfg['tag'] = 'make_dataset'
     process_control()

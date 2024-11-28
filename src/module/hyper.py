@@ -17,9 +17,6 @@ def process_control():
     cfg['sample_rate'] = 16000
     cfg['segment_seconds'] = 1
 
-    # VCTKTime
-    cfg['audio_pad_id'] = 0
-
     # VCTKMel
     cfg['preemph'] = 0.97
     cfg['n_fft'] = 2048
@@ -58,7 +55,8 @@ def process_control():
     cfg[tag]['optimizer']['betas'] = (0.9, 0.999)
     cfg[tag]['optimizer']['weight_decay'] = 5e-4
     cfg[tag]['optimizer']['nesterov'] = True
-    cfg[tag]['optimizer']['batch_size'] = {'train': cfg['batch_size'], 'test': cfg['batch_size']}
+    cfg[tag]['optimizer']['batch_size'] = {'train': cfg['batch_size'], 'test_in': cfg['batch_size'],
+                                           'test_out': cfg['batch_size']}
     cfg[tag]['optimizer']['step_period'] = cfg['step_period']
     cfg[tag]['optimizer']['num_steps'] = cfg['num_steps']
     cfg[tag]['optimizer']['scheduler_name'] = 'CosineAnnealingLR'

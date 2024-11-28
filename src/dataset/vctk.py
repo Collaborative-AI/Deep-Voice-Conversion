@@ -1,12 +1,10 @@
 import librosa
 import soundfile as sf
-import pandas as pd
 import numpy as np
 import os
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 from scipy.signal import lfilter
 from module import check_exists, save, load
@@ -22,9 +20,11 @@ class VCTK(Dataset):
         self.transform = transform
         self.sample_rate = cfg['sample_rate']
         self.segment_seconds = cfg['segment_seconds']
+        self.segment_length = self.sample_rate * self.segment_seconds
         self.sr_int = str(int(self.sample_rate // 1e3))
         self.train_ratio = 0.9
         self.num_test_out = 10
+        self.pad_value = 0
         if not check_exists(self.processed_folder):
             self.process()
         self.data = load(os.path.join(self.processed_folder, self.sr_int, self.split))
@@ -41,6 +41,10 @@ class VCTK(Dataset):
     @property
     def raw_folder(self):
         return os.path.join(self.root, 'raw')
+
+    @property
+    def wav_folder(self):
+        return os.path.join(self.raw_folder, 'wav' + self.sr_int)
 
     def process(self):
         if not check_exists(os.path.join(self.raw_folder, 'wav48_silence_trimmed')):
@@ -62,6 +66,47 @@ class VCTK(Dataset):
         extract_file(os.path.join(self.raw_folder, filename))
         return
 
+    def load_audio(self, filename, speaker):
+        audio = load_wav(os.path.join(self.wav_folder, speaker, filename), cfg['sample_rate'])
+        audio = torch.from_numpy(audio).to(torch.float32)
+        if len(audio) > self.segment_length:
+            start_idx = torch.randint(0, len(audio) - self.segment_length, (1,)).item()
+            audio = audio[start_idx:start_idx + self.segment_length]
+        else:
+            audio = F.pad(audio, (0, self.segment_length - len(audio)), 'constant', self.pad_value)
+        return audio
+
+    def __getitem__(self, index):
+        data = self.data[index]
+        audio = self.load_audio(data['filename'], data['speaker'])
+        speaker = data['speaker']
+        speaker_id = data['speaker_id']
+        speaker_meta = data['speaker_meta']
+
+        ref_filenames = os.listdir(os.path.join(self.wav_folder, speaker))
+        ref_index = torch.randint(0, len(ref_filenames), (1,)).item()
+        ref_filename = ref_filenames[ref_index]
+        ref_speaker = data['speaker']
+        ref_audio = self.load_audio(ref_filename, ref_speaker)
+        ref_speaker_id = data['speaker_id']
+        ref_speaker_meta = data['speaker_meta']
+
+        input = {
+            'audio': audio,
+            'speaker': speaker,
+            'speaker_id': speaker_id,
+            'speaker_meta': speaker_meta,
+            'ref_audio': ref_audio,
+            'ref_speaker': ref_speaker,
+            'ref_speaker_id': ref_speaker_id,
+            'ref_speaker_meta': ref_speaker_meta,
+        }
+        if self.transform is not None:
+            input = self.transform(input)
+        print(input)
+        exit()
+        return input
+
     def __repr__(self):
         fmt_str = 'Dataset {}\nSize: {}\nRoot: {}\nSplit: {}\nTransforms: {}'.format(
             self.__class__.__name__, self.__len__(), self.root, self.split, self.transform.__repr__())
@@ -70,7 +115,7 @@ class VCTK(Dataset):
     def downsample(self):
         # Define paths and target sample rate
         input_dir = os.path.join(self.raw_folder, 'wav48_silence_trimmed')
-        output_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
+        output_dir = self.wav_folder
 
         # Ensure the output directory exists
         os.makedirs(output_dir, exist_ok=True)
@@ -129,23 +174,8 @@ class VCTK(Dataset):
                 }
         return speaker_info
 
-    # def speaker_file_paths(self, root_dir):
-    #     speaker2filenames = defaultdict(lambda: [])
-    #     for path in sorted(glob.glob(os.path.join(root_dir, "*/*"))):
-    #         filename = path.strip().split("\\")[-1]  # "\\" for Windows, "/" for Linux
-    #         speaker_id = get_speaker_id(filename)
-    #         speaker2filenames[speaker_id].append(path)
-    #     return speaker2filenames
-    #
-    # def get_speaker_id(self, filename):
-    #     pattern = r'^p\d{3}_(\d{3})\.wav$'
-    #     match = re.search(pattern, filename)
-    #     if match:
-    #         speaker_id = filename.split('_')[0]
-    #     return speaker_id
-
     def make_data(self):
-        wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
+        # wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
         speaker_info = self.read_speaker_info()
         speaker_list = list(speaker_info.keys())
         train_speakers = speaker_list[:-self.num_test_out]
@@ -153,11 +183,12 @@ class VCTK(Dataset):
         speaker_to_idx = {speaker: idx for idx, speaker in enumerate(speaker_list)}
         speaker_split = {'train': train_speakers, 'test_out': test_out_speakers}
 
-        def make_entry(path_, speaker_):
+        def make_entry(filename_, speaker_):
             speaker_id = speaker_to_idx.get(speaker_)
             speaker_meta = speaker_info.get(speaker_)
             entry = {
-                "path": path_,
+                "filename": filename_,
+                "speaker": speaker_,
                 "speaker_id": speaker_id,
                 "speaker_meta": speaker_meta
             }
@@ -166,58 +197,26 @@ class VCTK(Dataset):
         train_dataset = []
         test_in_dataset = []
         test_out_dataset = []
-        for speaker in tqdm(os.listdir(wav_dir), desc="Creating dataset", unit="speaker"):
-            files = os.listdir(os.path.join(wav_dir, speaker))
-            valid_files = []
-            for file in files:
-                wav = load_wav(os.path.join(wav_dir, speaker, file), self.sample_rate)
-                if len(wav) > self.sample_rate * self.segment_seconds:
-                    valid_files.append(file)
+        for speaker in tqdm(os.listdir(self.wav_folder), desc="Creating dataset", unit="speaker"):
+            files = os.listdir(os.path.join(self.wav_folder, speaker))
+            # valid_files = []
+            # for file in files:
+            #     wav = load_wav(os.path.join(self.wav_folder, speaker, file), self.sample_rate)
+            #     if len(wav) > self.sample_rate * self.segment_seconds:
+            #         valid_files.append(file)
             if speaker in train_speakers:
-                num_train = int(len(valid_files) * self.train_ratio)
-                train_files = valid_files[:num_train]
-                test_in_files = valid_files[num_train:]
+                num_train = int(len(files) * self.train_ratio)
+                train_files = files[:num_train]
+                test_in_files = files[num_train:]
                 for path in train_files:
                     train_dataset.append(make_entry(path, speaker))
                 for path in test_in_files:
                     test_in_dataset.append(make_entry(path, speaker))
             else:
-                for path in valid_files:
+                for path in files:
                     test_out_dataset.append(make_entry(path, speaker))
-        # print(train_dataset)
-        # print(test_in_dataset)
-        # print(test_out_dataset)
-        # exit()
-
-        # for root, dirs, files in os.walk(wav_dir):
-        #     for file in files:
-        #         if file.endswith(".wav"):
-        #             path = os.path.join(root, file)
-        #             speaker = file.split('_')[0]
-        #             if speaker in train_speakers:
-        #                 train_files.append((file, speaker))
-
-        # train_dataset = []
-        # test_in_dataset = []
-        # test_out_dataset = []
-        # for root, speaker, file in tqdm(files_to_process, desc="Creating dataset", unit="file"):
-        #     if speaker in train_speakers:
-        #         file_path = os.path.join(root, file)
-        #
-        #     train_dataset.append(entry)
-
-        # df = pd.DataFrame(dataset)
-        # unique_speakers = np.unique(id)
-        # df['idx'] = df['id'].map(speaker_to_idx)
         meta = {'speaker_to_idx': speaker_to_idx, 'speaker_split': speaker_split}
         return train_dataset, test_in_dataset, test_out_dataset, meta
-
-    # def split_dataset(self, df, train_size=90, random_state=42):
-    #     speakers = df['id'].unique()
-    #     train_speakers, test_speakers = train_test_split(speakers, train_size=train_size, random_state=random_state)
-    #     train_df = df[df['id'].isin(train_speakers)]
-    #     test_df = df[df['id'].isin(test_speakers)]
-    #     return train_df, test_df
 
 
 class VCTKMel(VCTK):

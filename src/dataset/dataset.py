@@ -54,10 +54,11 @@ def make_dataset(data_name, verbose=True):
         dataset_['test'].transform = dataset.Compose([
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
-    elif data_name in ['VCTKTime', 'VCTKMel']:
+    elif data_name in ['VCTK']:
         root = os.path.join('data', 'VCTK')
         dataset_['train'] = eval('dataset.{}(root=root, split="train")'.format(data_name))
-        dataset_['test'] = eval('dataset.{}(root=root, split="test")'.format(data_name))
+        dataset_['test_in'] = eval('dataset.{}(root=root, split="test_in")'.format(data_name))
+        dataset_['test_out'] = eval('dataset.{}(root=root, split="test_out")'.format(data_name))
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
