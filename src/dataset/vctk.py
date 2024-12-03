@@ -103,8 +103,6 @@ class VCTK(Dataset):
         }
         if self.transform is not None:
             input = self.transform(input)
-        print(input)
-        exit()
         return input
 
     def __repr__(self):
@@ -175,7 +173,6 @@ class VCTK(Dataset):
         return speaker_info
 
     def make_data(self):
-        # wav_dir = os.path.join(self.raw_folder, 'wav' + self.sr_int)
         speaker_info = self.read_speaker_info()
         speaker_list = list(speaker_info.keys())
         train_speakers = speaker_list[:-self.num_test_out]
@@ -199,11 +196,6 @@ class VCTK(Dataset):
         test_out_dataset = []
         for speaker in tqdm(os.listdir(self.wav_folder), desc="Creating dataset", unit="speaker"):
             files = os.listdir(os.path.join(self.wav_folder, speaker))
-            # valid_files = []
-            # for file in files:
-            #     wav = load_wav(os.path.join(self.wav_folder, speaker, file), self.sample_rate)
-            #     if len(wav) > self.sample_rate * self.segment_seconds:
-            #         valid_files.append(file)
             if speaker in train_speakers:
                 num_train = int(len(files) * self.train_ratio)
                 train_files = files[:num_train]

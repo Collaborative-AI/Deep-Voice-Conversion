@@ -8,8 +8,6 @@ from module import save, Stats, makedir_exist_ok, process_control
 if __name__ == "__main__":
     stats_path = os.path.join('output', 'stats')
     dim = 1
-    # data_names = ['MNIST', 'FashionMNIST', 'SVHN', 'CIFAR10', 'CIFAR100', 'VCTKTime', 'VCTKMel']
-    # data_names = ['VCTKTime', 'VCTKMel']
     data_names = ['VCTK']
     cfg['seed'] = 0
     cfg['tag'] = 'make_dataset'
@@ -21,10 +19,7 @@ if __name__ == "__main__":
             cfg['step'] = 0
             data_loader = make_data_loader(dataset, cfg[cfg['tag']]['optimizer']['batch_size'], shuffle=False)
             stats = Stats(dim=dim)
-            print(len(dataset['train']))
+            print('num samples: {}'.format(len(dataset['train'])), 'num batches: {}'.format(len(data_loader['train'])))
             for i, input in enumerate(data_loader['train']):
-                print(i, input['data'].shape)
-                stats.update(input['data'])
-            print(data_name, stats)
-            makedir_exist_ok(stats_path)
-            save(stats, os.path.join(stats_path, '{}'.format(data_name)), 'torch')
+                print('audio shape: {}'.format(input['audio'].shape))
+                break

@@ -75,6 +75,8 @@ def input_collate(input):
                 batch[k] = torch.stack([f[k] for f in input])
             elif isinstance(v, np.ndarray):
                 batch[k] = torch.tensor(np.stack([f[k] for f in input]))
+            elif isinstance(v, (list, dict)):
+                batch[k] = [f[k] for f in input]
             else:
                 batch[k] = torch.tensor([f[k] for f in input])
     return batch
