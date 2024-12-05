@@ -32,10 +32,10 @@ def process_control():
     cfg['model'] = {}
     cfg['model']['model_name'] = cfg['model_name']
     data_shape = {'MNIST': [1, 28, 28], 'FashionMNIST': [1, 28, 28], 'SVHN': [3, 32, 32], 'CIFAR10': [3, 32, 32],
-                  'CIFAR100': [3, 32, 32], 'VCTKTime': [1, cfg['wav_length']], 'VCTKMel': mel_shape}
+                  'CIFAR100': [3, 32, 32], 'VCTK': [-1]}
     target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10,
                    'CIFAR10': 10, 'CIFAR100': 100,
-                   'VCTKTime': cfg['wav_length'], 'VCTKMel': np.prod(mel_shape)}
+                   'VCTK': cfg['wav_length']}
     cfg['model']['data_shape'] = data_shape[cfg['data_name']]
     cfg['model']['target_size'] = target_size[cfg['data_name']]
     cfg['model']['linear'] = {}
@@ -45,6 +45,53 @@ def process_control():
     cfg['model']['resnet18'] = {'hidden_size': [64, 128, 256, 512]}
     cfg['model']['wresnet28x2'] = {'depth': 28, 'widen_factor': 2, 'drop_rate': 0.0}
     cfg['model']['wresnet28x8'] = {'depth': 28, 'widen_factor': 8, 'drop_rate': 0.0}
+    cfg['model']['mainvc'] = {
+        "SpeakerEncoder": {
+            "c_in": 80,
+            "c_h": 64,
+            "c_out": 64,
+            "c_bank": 64,
+            "kernel_size": 5,
+            "n_conv_blocks": 6,
+            "n_dense_blocks": 6,
+            "subsample": [1, 2, 1, 2, 1, 2],
+            "act": "relu",
+            "dropout_rate": 0
+        },
+        "ContentEncoder": {
+            "c_in": 80,
+            "c_h": 64,
+            "c_out": 64,
+            "c_bank": 64,
+            "kernel_size": 5,
+            "n_conv_blocks": 6,
+            "subsample": [1, 2, 1, 2, 1, 2],
+            "act": "relu",
+            "dropout_rate": 0
+        },
+        "Decoder": {
+            "c_in": 64,
+            "c_cond": 64,
+            "c_h": 64,
+            "c_out": 80,
+            "kernel_size": 5,
+            "n_conv_blocks": 6,
+            "upsample": [2, 1, 2, 1, 2, 1],
+            "act": "relu",
+            "sn": False,
+            "dropout_rate": 0
+        },
+        "CMI": {
+            "mine": 64,
+            "club": 64
+        },
+        "lambda": {
+            "lambda_rec": 10,
+            "lambda_kl": 1,
+            "lambda_sia": 5,
+            "lambda_mi": 1
+        }
+    }
 
     tag = cfg['tag']
     cfg[tag] = {}

@@ -1,8 +1,8 @@
 ---
 # control
 control:
-  data_name: VCTKTime
-  model_name: linear
+  data_name: VCTK
+  model_name: mainvc
 # experiment
 pin_memory: True
 num_workers: 0

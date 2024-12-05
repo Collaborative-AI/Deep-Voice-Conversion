@@ -424,34 +424,4 @@ class MAINVC(nn.Module):
         return emb
 
 
-"""
-# __________test__________
-import yaml
-import time
-with open("../config.yaml") as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
-
-Es = SpeakerEncoder(**config["SpeakerEncoder"])
-Ec = ContentEncoder(**config["ContentEncoder"])
-D = Decoder(**config["Decoder"])
-
-x = torch.randn(1, 80, 128)
-y = torch.randn(1, 80, 128)
-
-# inference time test
-start_time = time.time()
-
-cond = Es(x)
-mu = Ec(y)[0]
-dec = D(mu, cond)
-
-end_time = time.time()
-
-print(f"inference time cost: {(end_time-start_time)/100}")
-
-print(f"content embedding shape (emb): {cond.shape}")
-print(f"speaker embedding shape (mu): {mu.shape}")
-print(f"converted mel shape: {dec.shape}")
-"""
-
 
