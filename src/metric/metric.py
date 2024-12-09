@@ -13,10 +13,10 @@ def make_metric(split, **kwargs):
         best_metric_name = 'Accuracy'
         for k in metric_name:
             metric_name[k].extend(['Loss', 'Accuracy'])
-    elif data_name in ['VCTKTime', 'VCTKMel']:
+    elif data_name in ['VCTK']:
         best = float('inf')
         best_direction = 'down'
-        best_metric_name = 'MSE'
+        best_metric_name = 'Loss'
         for k in metric_name:
             metric_name[k].extend(['Loss', 'MSE'])
     else:

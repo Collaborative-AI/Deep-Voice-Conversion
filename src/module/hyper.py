@@ -16,27 +16,20 @@ def process_control():
 
     cfg['sample_rate'] = 16000
     cfg['segment_seconds'] = 1
-
-    # VCTKMel
-    cfg['preemph'] = 0.97
-    cfg['n_fft'] = 2048
-    cfg['hop_length'] = 300
-    cfg['win_length'] = 1200
-    cfg['fmin'] = 80
-    cfg['fmax'] = 8000
-    cfg['n_mels'] = 80
-
     cfg['wav_length'] = cfg['sample_rate'] * cfg['segment_seconds']
-    mel_shape = [1, cfg['n_mels'], int(cfg['wav_length'] / cfg['hop_length']) + 1]
+
+    # mel_shape = [1, cfg['n_mels'], int(cfg['wav_length'] / cfg['hop_length']) + 1]
 
     cfg['model'] = {}
+    cfg['model']['sample_rate'] = cfg['sample_rate']
+    cfg['model']['segment_seconds'] = cfg['segment_seconds']
     cfg['model']['model_name'] = cfg['model_name']
-    data_shape = {'MNIST': [1, 28, 28], 'FashionMNIST': [1, 28, 28], 'SVHN': [3, 32, 32], 'CIFAR10': [3, 32, 32],
-                  'CIFAR100': [3, 32, 32], 'VCTK': [-1]}
+    data_size = {'MNIST': [1, 28, 28], 'FashionMNIST': [1, 28, 28], 'SVHN': [3, 32, 32], 'CIFAR10': [3, 32, 32],
+                 'CIFAR100': [3, 32, 32], 'VCTK': [-1]}
     target_size = {'MNIST': 10, 'FashionMNIST': 10, 'SVHN': 10,
                    'CIFAR10': 10, 'CIFAR100': 100,
                    'VCTK': cfg['wav_length']}
-    cfg['model']['data_shape'] = data_shape[cfg['data_name']]
+    cfg['model']['data_size'] = data_size[cfg['data_name']]
     cfg['model']['target_size'] = target_size[cfg['data_name']]
     cfg['model']['linear'] = {}
     cfg['model']['mlp'] = {'hidden_size': 128, 'scale_factor': 2, 'num_layers': 2, 'activation': 'relu'}
@@ -90,6 +83,14 @@ def process_control():
             "lambda_kl": 1,
             "lambda_sia": 5,
             "lambda_mi": 1
+        },
+        'mel': {
+            'preemph': 0.97,
+            'n_fft': [2048],
+            'win_length': [1200],
+            'n_mels': 80,
+            'fmin': 80,
+            'fmax': 8000
         }
     }
 
