@@ -88,9 +88,10 @@ def process_control():
             'preemph': 0.97,
             'n_fft': [2048],
             'win_length': [1200],
-            'n_mels': 80,
-            'fmin': 80,
-            'fmax': 8000
+            'hop_ratio': 0.25,
+            'n_mels': [80],
+            'f_min': 80,
+            'f_max': 8000
         }
     }
 
