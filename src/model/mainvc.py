@@ -413,11 +413,6 @@ class MAINVC(nn.Module):
         emb = self.speaker_encoder(x)
         return emb
 
-    def time_shuffle(self, data):
-        seg_list = list(torch.split(data, 20, dim=2))
-        random.shuffle(seg_list)
-        return torch.cat(seg_list, dim=2)
-
 
 def mainvc(cfg):
     model = MAINVC(cfg['mainvc'])
