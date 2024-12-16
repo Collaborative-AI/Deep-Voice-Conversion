@@ -19,8 +19,8 @@ class VCTK(Dataset):
         self.split = split
         self.transform = transform
         self.sample_rate = cfg['sample_rate']
-        self.segment_seconds = cfg['segment_seconds']
-        self.segment_length = self.sample_rate * self.segment_seconds
+        # self.segment_seconds = cfg['segment_seconds']
+        self.segment_length = cfg['segment_length']
         self.sr_int = str(int(self.sample_rate // 1e3))
         self.train_ratio = 0.9
         self.num_test_out = 10
