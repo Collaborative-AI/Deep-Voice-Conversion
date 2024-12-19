@@ -2,10 +2,11 @@ import math
 import torchaudio.transforms
 from model.model import *
 from torchaudio.functional import lfilter
+from .mi import MI
 
 
 class VC(nn.Module):
-    def __init__(self, core, model_name, sample_rate, mel, regularization):
+    def __init__(self, core, model_name, sample_rate, mel, regularization, mi_cfg):
         super().__init__()
         self.core = core
         self.model_name = model_name
@@ -13,6 +14,7 @@ class VC(nn.Module):
         self.mel = mel
         self.mel_transform = self.make_mel_transform()
         self.regularization = regularization
+        self.mi = MI(mi_cfg)
 
     def time_shuffle(self, data):
         seg_list = torch.split(data, 20, dim=2)  # TODO: shuffle size can be adjusted
@@ -62,8 +64,8 @@ class VC(nn.Module):
             mu, log_sigma, emb, emb_, dec = self.core(log_mel, log_mel_shuffled, log_ref_mel)
 
             # loss_flag = torch.ones([emb.shape[0]]).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-            emb = emb.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-            emb_ = emb_.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+            # emb = emb.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+            # emb_ = emb_.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
             # reconstruction loss
             # print(dec.size(), log_mel.size(), log_mel_shuffled.size(), log_ref_mel.size())
@@ -86,28 +88,7 @@ class VC(nn.Module):
                 loss_sia = 0
             # CMI first forward
             if self.regularization['mi'] > 0:
-                for _ in range(self.cmi_steps):
-                    self.mi_opt.zero_grad()
-                    mu_tmp = mu.transpose(1, 2)
-                    emb_tmp = emb
-                    mu_tmp = mu_tmp.detach()
-                    emb_tmp = emb_tmp.detach()
-                    self.mi_club.train()
-                    self.mi_mine.train()
-                    # jointly train CLUB and MINE
-                    self.club_loss = -self.mi_club.loglikeli(emb_tmp, mu_tmp)
-                    self.mine_loss = self.mi_mine.learning_loss(emb_tmp, mu_tmp)
-                    delta = self.mi_club.mi_est(emb_tmp, mu_tmp) - self.mi_mine(
-                        emb_tmp, mu_tmp
-                    )
-                    gap_loss = delta if delta > 0 else 0
-                    mimodule_loss = self.club_loss + self.mine_loss + gap_loss
-                    mimodule_loss.backward(retain_graph=True)
-                    self.mi_opt.step()
-
-                # CMI second forward
-                # MI loss
-                loss_mi = self.mi_club.mi_est(emb, mu.transpose(1, 2))
+                loss_mi = self.mi(emb, mu)
             else:
                 loss_mi = 0
 

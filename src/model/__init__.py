@@ -6,3 +6,4 @@ from .resnet import *
 from .wresnet import *
 from .vc import vc
 from .mainvc import *
+from .mi import *
