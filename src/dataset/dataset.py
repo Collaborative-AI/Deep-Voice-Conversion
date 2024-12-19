@@ -54,10 +54,11 @@ def make_dataset(data_name, verbose=True):
         dataset_['test'].transform = dataset.Compose([
             transforms.ToTensor(),
             transforms.Normalize(*data_stats[data_name])])
-    elif data_name in ['VCTKTime', 'VCTKMel']:
+    elif data_name in ['VCTK']:
         root = os.path.join('data', 'VCTK')
         dataset_['train'] = eval('dataset.{}(root=root, split="train")'.format(data_name))
-        dataset_['test'] = eval('dataset.{}(root=root, split="test")'.format(data_name))
+        dataset_['test_in'] = eval('dataset.{}(root=root, split="test_in")'.format(data_name))
+        dataset_['test_out'] = eval('dataset.{}(root=root, split="test_out")'.format(data_name))
     else:
         raise ValueError('Not valid dataset name')
     if verbose:
@@ -74,6 +75,8 @@ def input_collate(input):
                 batch[k] = torch.stack([f[k] for f in input])
             elif isinstance(v, np.ndarray):
                 batch[k] = torch.tensor(np.stack([f[k] for f in input]))
+            elif isinstance(v, (list, dict)):
+                batch[k] = [f[k] for f in input]
             else:
                 batch[k] = torch.tensor([f[k] for f in input])
     return batch
@@ -119,7 +122,7 @@ def make_data_loader(dataset, batch_size, num_steps=None, step=0, step_period=1,
 
 def process_dataset(dataset):
     processed_dataset = dataset
-    cfg['data_size'] = {k: len(processed_dataset[k]) for k in processed_dataset}
+    cfg['num_samples'] = {k: len(processed_dataset[k]) for k in processed_dataset}
     if 'num_epochs' in cfg:
         cfg['num_steps'] = int(np.ceil(len(processed_dataset['train']) / cfg['batch_size'])) * cfg['num_epochs']
         cfg['eval_period'] = int(np.ceil(len(processed_dataset['train']) / cfg['batch_size']))

@@ -7,9 +7,9 @@ from transformers import get_linear_schedule_with_warmup
 
 
 def make_model(cfg):
-    model = eval('model.{}(cfg)'.format(cfg['model_name']))
-    return model
-
+    core = eval('model.{}(cfg)'.format(cfg['model_name']))
+    model_ = model.vc(core, cfg)
+    return model_
 
 def make_loss(output, input):
     if 'target' in input:
