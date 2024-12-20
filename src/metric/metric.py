@@ -78,10 +78,10 @@ class Metric:
                     metric[split][m] = {'mode': 'batch', 'metric': (lambda input, output: output['loss'].item())}
                 elif m == 'Accuracy':
                     metric[split][m] = {'mode': 'batch',
-                                        'metric': (lambda input, output: Accuracy(output['target'], input['target']))}
+                                        'metric': (lambda input, output: Accuracy(output['pred'], input['target']))}
                 elif m == 'MSE':
                     metric[split][m] = {'mode': 'batch',
-                                        'metric': (lambda input, output: MSE(output['target'], input['target']))}
+                                        'metric': (lambda input, output: MSE(output['pred'], input['target']))}
                 elif m == 'SSIM':
                     metric[split][m] = {'mode': 'batch', 'metric': SSIM()}
                 elif m == 'RMSE':

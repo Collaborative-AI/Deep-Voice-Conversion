@@ -39,6 +39,8 @@ def process_control():
     cfg['model']['resnet18'] = {'hidden_size': [64, 128, 256, 512]}
     cfg['model']['wresnet28x2'] = {'depth': 28, 'widen_factor': 2, 'drop_rate': 0.0}
     cfg['model']['wresnet28x8'] = {'depth': 28, 'widen_factor': 8, 'drop_rate': 0.0}
+
+    cfg['model']['mi'] = {'club': {'hidden_size': 64}, 'mine': {'hidden_size': 64}, 'num_steps': 5}
     cfg['model']['mainvc'] = {
         "SpeakerEncoder": {
             "c_in": 80,
@@ -75,10 +77,10 @@ def process_control():
             "sn": False,
             "dropout_rate": 0
         },
-        "CMI": {
-            "mine": 64,
-            "club": 64
-        },
+        # "CMI": {
+        #     "mine": 64,
+        #     "club": 64
+        # },
         # "lambda": {
         #     "lambda_rec": 10,
         #     "lambda_kl": 1,
@@ -95,16 +97,16 @@ def process_control():
             'f_max': 8000
         }
     }
-    cfg['model']['regularization'] = {'rec': 10, 'kl': 1, 'sia': 5, 'mi': 0}
+    cfg['model']['regularization'] = {'rec': 10, 'kl': 1, 'sia': 5, 'mi': 1}
 
     tag = cfg['tag']
     cfg[tag] = {}
     cfg[tag]['optimizer'] = {}
-    cfg[tag]['optimizer']['optimizer_name'] = 'SGD'
-    cfg[tag]['optimizer']['lr'] = 1e-1
+    cfg[tag]['optimizer']['optimizer_name'] = 'AdamW'
+    cfg[tag]['optimizer']['lr'] = 1e-3
     cfg[tag]['optimizer']['momentum'] = 0.9
     cfg[tag]['optimizer']['betas'] = (0.9, 0.999)
-    cfg[tag]['optimizer']['weight_decay'] = 5e-4
+    cfg[tag]['optimizer']['weight_decay'] = 1e-4
     cfg[tag]['optimizer']['nesterov'] = True
     cfg[tag]['optimizer']['batch_size'] = {'train': cfg['batch_size'], 'test_in': cfg['batch_size'],
                                            'test_out': cfg['batch_size']}

@@ -55,12 +55,12 @@ class VC(nn.Module):
         if self.model_name == 'mainvc':
             print(input['audio'].size())
             mel = self.make_mel(input['audio'])[0]  # N, S, T
-            print(mel.size())
-            # exit()
-            log_mel = (mel + 1e-9).log()
-            log_mel_shuffled = self.time_shuffle(log_mel)
             ref_mel = self.make_mel(input['ref_audio'])[0]
+            log_mel = (mel + 1e-9).log()
+            # log_mel[mel == 0] = 0
             log_ref_mel = (ref_mel + 1e-9).log()
+            # log_ref_mel[ref_mel == 0] = 0
+            log_mel_shuffled = self.time_shuffle(log_mel)
             mu, log_sigma, emb, emb_, dec = self.core(log_mel, log_mel_shuffled, log_ref_mel)
 
             # loss_flag = torch.ones([emb.shape[0]]).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
@@ -73,6 +73,7 @@ class VC(nn.Module):
             # print(log_mel.isnan().any())
             # print(dec.isnan().any())
             # exit()
+            # loss_rec = F.l1_loss(dec[mel != 0], log_mel[mel != 0])
             loss_rec = F.l1_loss(dec, log_mel)
             # KL loss
             if self.regularization['kl'] > 0:
@@ -88,7 +89,7 @@ class VC(nn.Module):
                 loss_sia = 0
             # CMI first forward
             if self.regularization['mi'] > 0:
-                loss_mi = self.mi(emb, mu)
+                loss_mi = self.mi(mu, emb, self.training)
             else:
                 loss_mi = 0
 
@@ -101,13 +102,15 @@ class VC(nn.Module):
                     self.regularization['sia'] * loss_sia + self.regularization['mi'] * loss_mi)
             output['pred'] = dec
             output['loss'] = loss
+            input['target'] = log_mel
             print(loss)
-        exit()
+        # exit()
         return output
 
 
 def vc(core, cfg):
-    model = VC(core, cfg['model_name'], cfg['sample_rate'], cfg[cfg['model_name']]['mel'], cfg['regularization'])
+    model = VC(core, cfg['model_name'], cfg['sample_rate'], cfg[cfg['model_name']]['mel'], cfg['regularization'],
+               cfg['mi'])
     return model
 
 # def log_mel_spectrogram(

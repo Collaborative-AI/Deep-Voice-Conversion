@@ -9,53 +9,59 @@ class MI(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        mine_size = self.cfg["mine_size"]
-        club_size = self.cfg["club_size"]
-        self.cmi_steps = self.cfg["cmi_steps"]
+        mine_size = self.cfg['mine']['hidden_size']
+        club_size = self.cfg['club']['hidden_size']
+        self.num_steps = self.cfg["num_steps"]
         self.mi_club = CLUBSample_group(club_size, club_size, club_size)
         self.mi_mine = MINE(mine_size // 2, mine_size // 2, mine_size)
         self.mi_opt = torch.optim.Adam(
             itertools.chain(self.mi_club.parameters(), self.mi_mine.parameters()),
             lr=1e-4)
 
-    def forward(self, mu, emb):
+    def forward(self, mu, emb, train=False):
         """
         Perform the CMI (Conditional Mutual Information) forward pass:
         - First forward step: Training CLUB and MINE jointly.
         - Second forward step: Compute the MI loss.
         """
         # CMI first forward
-        if self.training:
-            for _ in range(self.cmi_steps):
+        if train:
+            # Set the modules to train mode
+            self.mi_club.train(True)
+            self.mi_mine.train(True)
+            for _ in range(self.num_steps):
                 self.mi_opt.zero_grad()
 
                 # Detach the tensors for the gradient computation
                 mu_tmp = mu.transpose(1, 2).detach()
                 emb_tmp = emb.detach()
 
-                # # Set the modules to train mode
-                # self.mi_club.train(True)
-                # self.mi_mine.train(True)
+
 
                 # Compute losses for CLUB and MINE
-                self.club_loss = -self.mi_club.loglikeli(emb_tmp, mu_tmp)
-                self.mine_loss = self.mi_mine.learning_loss(emb_tmp, mu_tmp)
+                club_loss = -self.mi_club.loglikeli(emb_tmp, mu_tmp)
+                mine_loss = self.mi_mine.learning_loss(emb_tmp, mu_tmp)
 
                 # Estimate the gap between CLUB and MINE
                 delta = self.mi_club.mi_est(emb_tmp, mu_tmp) - self.mi_mine(emb_tmp, mu_tmp)
                 gap_loss = delta if delta > 0 else 0  # Ensure gap_loss is non-negative
 
                 # Total loss
-                mi_loss = self.club_loss + self.mine_loss + gap_loss
+                mi_loss = club_loss + mine_loss + gap_loss
 
                 # Backpropagation
                 mi_loss.backward(retain_graph=True)
                 self.mi_opt.step()
             # CMI second forward (Evaluation Step)
             # Compute the MI loss using CLUB only (for regularization)
+            self.mi_club.train(False)
+            self.mi_mine.train(False)
+        else:
+            self.mi_club.train(False)
+            self.mi_mine.train(False)
         loss_mi = self.mi_club.mi_est(emb, mu.transpose(1, 2))
 
-        return loss_mi, self.club_loss, self.mine_loss
+        return loss_mi
 
 
 """MI module
