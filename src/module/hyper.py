@@ -94,7 +94,8 @@ def process_control():
             'hop_length': [300],
             'n_mels': [80],
             'f_min': 80,
-            'f_max': 8000
+            'f_max': 8000,
+            'shuffle_size': 20
         }
     }
     cfg['model']['regularization'] = {'rec': 10, 'kl': 1, 'sia': 5, 'mi': 1}

@@ -67,7 +67,8 @@ def runExperiment():
     data_iterator = enumerate(data_loader['train'])
     while cfg['step'] < cfg['num_steps']:
         train(data_iterator, model, optimizer, scheduler, logger)
-        test(data_loader['test'], model, logger)
+        test(data_loader['test_in'], model, logger)
+        test(data_loader['test_out'], model, logger)
         result = {'cfg': cfg, 'model': model.state_dict(),
                   'optimizer': optimizer.state_dict(), 'scheduler': scheduler.state_dict(),
                   'logger': logger.state_dict()}
