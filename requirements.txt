@@ -16,3 +16,4 @@ scikit-learn
 transformers
 sentencepiece
 tensorboard
+jiwer
