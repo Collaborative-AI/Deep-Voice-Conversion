@@ -2,14 +2,14 @@ import os
 import jiwer
 import torch
 import torchaudio
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Tokenizer, Wav2Vec2Processor, WavLMForCTC
+from transformers import AutoProcessor, AutoModelForCTC, Wav2Vec2Processor, WavLMForCTC
 from scipy.spatial.distance import cosine
 
 
 class ASR:
 
     def __init__(self, device=None):
-        self.model_name_or_path = "facebook/wav2vec2-large-960h-lv60-self"
+        self.model_name_or_path = "facebook/hubert-large-ls960-ft"
         self.cache_dir = os.path.join('output', 'asr')
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -37,8 +37,8 @@ class ASR:
         return wer, cer
 
     def make_model(self):
-        model = Wav2Vec2ForCTC.from_pretrained(self.model_name_or_path, cache_dir=self.cache_dir).to(self.device)
-        tokenizer = Wav2Vec2Tokenizer.from_pretrained(self.model_name_or_path, cache_dir=self.cache_dir)
+        model = AutoModelForCTC.from_pretrained(self.model_name_or_path, cache_dir=self.cache_dir).to(self.device)
+        tokenizer = AutoProcessor.from_pretrained(self.model_name_or_path, cache_dir=self.cache_dir)
         return model, tokenizer
 
     def wav_to_text(self, wav):
@@ -77,7 +77,7 @@ class ASR:
 class SSIM:
 
     def __init__(self, device=None):
-        self.model_name_or_path = "facebook/wav2vec2-large-960h-lv60-self"
+        self.model_name_or_path = "patrickvonplaten/wavlm-libri-clean-100h-base-plus'"
         self.cache_dir = os.path.join('output', 'asr')
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -103,9 +103,9 @@ class SSIM:
         return ssim
 
     def make_model(self):
-        processor = Wav2Vec2Processor.from_pretrained('patrickvonplaten/wavlm-libri-clean-100h-base-plus',
+        processor = Wav2Vec2Processor.from_pretrained(self.model_name_or_path,
                                                       cache_dir=self.cache_dir)
-        model = WavLMForCTC.from_pretrained('patrickvonplaten/wavlm-libri-clean-100h-base-plus',
+        model = WavLMForCTC.from_pretrained(self.model_name_or_path,
                                             cache_dir=self.cache_dir).to(self.device)
         return model, processor
 
@@ -123,10 +123,11 @@ class SSIM:
 
         # Extract WavLM embeddings
         with torch.no_grad():
-            outputs = self.model(**input_values)
-            logits = outputs.logits
-            # Average over time steps to create a speaker embedding
-            embedding = logits.mean(dim=1).squeeze()  # Average over time steps
+            outputs = self.model(input_values, output_hidden_states=True)  # Enable hidden states output
+
+            # Use the last hidden state as the embedding
+            hidden_states = outputs.hidden_states[-1]  # Last layer's hidden state
+            embedding = hidden_states.mean(dim=1).squeeze()  # Average over time steps
 
         return embedding
 
