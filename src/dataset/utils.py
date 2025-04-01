@@ -150,6 +150,14 @@ def make_img(path, extensions=IMG_EXTENSIONS):
     return img, label
 
 
+def get_data_path_list(path):
+
+    with open(path, 'r') as f:
+        list = f.readlines()
+
+    return list
+
+
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms

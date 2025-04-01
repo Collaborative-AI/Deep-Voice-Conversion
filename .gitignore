@@ -126,5 +126,5 @@ res/
 scripts/
 
 .ipynb/
-
+pipe-env/
 dvc-venv/
